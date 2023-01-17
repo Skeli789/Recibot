@@ -1,7 +1,8 @@
 import React, {Component} from 'react';
-import {Form, FormControl, Button} from 'react-bootstrap';
+import {Form, FormControl, Dropdown} from 'react-bootstrap';
 import annyang from 'annyang';
 import numerizer from 'numerizer';
+import TextareaAutosize from 'react-textarea-autosize';
 
 import './stylesheets/Recipe.css';
 
@@ -15,6 +16,8 @@ const READING_INSTRUCTIONS = 1;
 const RECIPE_STRUCT =
 {
     title: "",
+    rawIngredients: "",
+    rawInstructions: "",
     ingredientsList: [],
     instructionsList: [],
     currentlyReadingIngredientLine: 0,
@@ -25,6 +28,10 @@ const RECIPE_STRUCT =
     readingState: 0,
 };
 
+//TODO: Prevent adding multiple recipes with the same name and set limit for recipe title
+//TODO: Add user notice when trying to save a recipe with a title that's already in use
+//TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
+
 
 class Recipe extends Component
 {
@@ -32,27 +39,63 @@ class Recipe extends Component
     {
         super(props);
 
+        let msg = new SpeechSynthesisUtterance();
+        let voices = window.speechSynthesis.getVoices();
+        msg.voice = voices[1]; //Nicer male voice
+        // localStorage.recipes = "[]";
+
         this.state =
         {
-            ingredientsInput: '',
-            instructionsInput: '',
-            ingredientsEdit: true,
-            instructionsEdit: true,
+            titleInput: "",
+            ingredientsInput: "",
+            instructionsInput: "",
             annyangStarted: false,
-            msg: new SpeechSynthesisUtterance(),
+            msg: msg,
             paused: false,
             stepByStep: false,
             waitingForNext: false,
             cancelWaitingForNext: false,
             speakingId: 0,
-            recipes: [RECIPE_STRUCT],
-            currentRecipe: 0,
+            recipes: ("recipes" in localStorage) ? JSON.parse(localStorage.recipes) : [],
+            currentRecipe: -1,
+            currentRecipeIsSaved: false,
         };
     }
 
     async setStateAndWait(newState)
     {
         return new Promise(resolve => this.setState(newState, resolve));
+    }
+
+    async changeToRecipe(recipeId)
+    {
+        this.stopTalking();
+        this.tryCancelWaitingForNext();
+
+        await this.setStateAndWait
+        ({
+            currentRecipe: recipeId,
+            titleInput: this.state.recipes[recipeId].title,
+            ingredientsInput: this.state.recipes[recipeId].rawIngredients,
+            instructionsInput: this.state.recipes[recipeId].rawInstructions,
+            paused: false,
+        });
+    }
+
+    wipeRecipe()
+    {
+        this.stopTalking();
+        this.tryCancelWaitingForNext();
+
+        this.setState
+        ({
+            currentRecipe: -1,
+            titleInput: "",
+            ingredientsInput: "",
+            instructionsInput: "",
+            paused: false,
+            currentRecipeIsSaved: false,
+        }); 
     }
 
     getCurrentRecipe()
@@ -81,29 +124,68 @@ class Recipe extends Component
         await this.updateCurrentRecipe(newObj, true);
     }
 
-    processIngredients()
+    async saveRecipe()
     {
-        if (!this.state.ingredientsEdit)
+        var recipes;
+
+        if (!this.state.currentRecipeIsSaved) //Brand new recipe
         {
-            this.setState({ingredientsEdit: true});
+            recipes = this.state.recipes;
+            recipes.push(Object.assign({}, RECIPE_STRUCT));
+            
+            for (let recipe of recipes)
+            {
+                if (recipe.title.toLowerCase() === this.state.titleInput)
+                {
+                    console.log(`A recipe names "${this.state.titleInput}" already exists! Cancelling saving.`);
+                    //TODO: Add user notice
+                    return;
+                }
+            }
+
+            await this.setStateAndWait
+            ({
+                recipes: recipes,
+                currentRecipe: recipes.length - 1,
+                currentRecipeIsSaved: true,
+            });
         }
-        else if (this.state.ingredientsInput.length > 0)
+
+        await this.processTitle();
+        await this.processIngredients();
+        await this.processInstructions();
+
+        recipes = [];
+        for (let recipe of this.state.recipes)
+        {
+            let savedRecipe = Object.assign({}, RECIPE_STRUCT); //Copy blank object so position in recipe reading is wiped
+            savedRecipe.title = recipe.title;
+            savedRecipe.rawIngredients = recipe.rawIngredients;
+            savedRecipe.rawInstructions = recipe.rawInstructions;
+            recipes.push(savedRecipe);
+        }
+        localStorage.recipes = JSON.stringify(recipes);
+    }
+
+    async processTitle()
+    {
+        if (this.state.titleInput.length > 0)
+            await this.updateCurrentRecipeAndWait({title: this.state.titleInput});
+    }
+
+    async processIngredients()
+    {
+        if (this.state.ingredientsInput.length > 0)
         {
             var ingredients = this.state.ingredientsInput.replace(/(^[ \t]*\n)/gm, "").trim(); //Remove blank lines
             var ingredientsList = ingredients.toLowerCase().split("\n");
-
-            this.setState({ingredientsEdit: false});
-            this.updateCurrentRecipe({ingredientsList: ingredientsList});
+            await this.updateCurrentRecipeAndWait({ingredientsList: ingredientsList, rawIngredients: this.state.ingredientsInput.trim()});
         }
     }
 
-    processInstructions()
+    async processInstructions()
     {
-        if (!this.state.instructionsInput)
-        {
-            this.setState({instructionsInput: true});
-        }
-        else if (this.state.instructionsInput.length > 0)
+        if (this.state.instructionsInput.length > 0)
         {
             var instructions = this.state.instructionsInput.replace(/(^[ \t]*\n)/gm, "").trim(); //Remove blank lines
             var instructionsList = instructions.toLowerCase().split("\n");
@@ -126,8 +208,7 @@ class Recipe extends Component
                 instructionsList[i] = subInstructionList;
             }
 
-            this.setState({instructionsEdit: false});
-            this.updateCurrentRecipe({instructionsList: instructionsList});
+            await this.updateCurrentRecipeAndWait({instructionsList: instructionsList, rawInstructions: this.state.instructionsInput.trim()});
         }
     }
 
@@ -187,6 +268,10 @@ class Recipe extends Component
                     '(read) (repeat) from step *number': (number) => this.readInstructionListFromStep(number),
                     'repeat last step': this.repeatLastStep.bind(this),
                     'which step has (the word) *details': (details) => this.findSpecificStepWith(details),
+                    //'which step am i on'
+
+                    'switch to *recipe': (recipe) => this.findAndSwitchToRecipe(recipe),
+                    'which recipe (am i cooking)': this.sayCurrentRecipe.bind(this),
 
                     '*wild': (wild) => console.log("Unknown command: " + wild),
                 };
@@ -226,7 +311,9 @@ class Recipe extends Component
 
         //Setup
         let msg = this.state.msg;
+        let voices = window.speechSynthesis.getVoices();
         msg.text = text;
+        msg.voice = voices[1]; //Nicer male voice
         this.setState
         ({
             msg: msg,
@@ -370,6 +457,7 @@ class Recipe extends Component
 
     async startListeningAndReading()
     {
+        await this.saveRecipe();
         if (this.tryStartAnnyang())
             this.sayText('Welcome! Please say either "ingredients" or "instructions"');
     }
@@ -662,7 +750,7 @@ class Recipe extends Component
         {
             for (let j = 0; j < instructionList[i].length; ++j)
             {
-                if (details in instructionList[i][j])
+                if (instructionList[i][j].includes(details))
                 {
                     this.sayText(`Step ${i} contains the phrase "${details}"`);
                     return;
@@ -673,32 +761,114 @@ class Recipe extends Component
         this.sayText(`No instruction was found with the phrase "${details}"`);
     }
 
+    async findAndSwitchToRecipe(recipeDetails)
+    {
+        let possibleRecipeIds = [];
+
+        for (let i = 0; i < this.state.recipes.length; ++i)
+        {
+            let recipe = this.state.recipes[i];
+
+            if (recipe.title.toLowerCase().includes(recipeDetails.toLowerCase()))
+                possibleRecipeIds.push(i);
+        }
+
+        if (possibleRecipeIds.length === 0)
+            this.sayText(`No recipes were found for "${recipeDetails}"`);
+        else if (possibleRecipeIds.length === 1)
+        {
+            if (possibleRecipeIds[0] === this.state.currentRecipe)
+                this.sayText(`You're already cooking ${this.getCurrentRecipe().title}.`)
+            else
+            {
+                await this.changeToRecipe(possibleRecipeIds[0]);
+                this.sayCurrentRecipe();
+            }
+        }
+        else
+        {
+            let textToSay = `Multiple recipes contain the phrase "${recipeDetails}". Which of these did you mean? `;
+            for (let recipeId of possibleRecipeIds)
+                textToSay += this.state.recipes[recipeId].title + ". ";
+
+            this.sayText(textToSay);
+        }
+    }
+
+    sayCurrentRecipe()
+    {
+        this.sayText(`Now cooking ${this.getCurrentRecipe().title}.`);
+    }
+
+    recipeListDropdown()
+    {
+        let dropdownItems = [];
+
+        if (this.state.recipes.length === 0)
+            dropdownItems = [<Dropdown.Item key={0}>No saved recipes!</Dropdown.Item>];
+        else
+        {
+            for (let i = 0; i < this.state.recipes.length; ++i)
+            {
+                let recipe = this.state.recipes[i];
+                dropdownItems.push(
+                    <Dropdown.Item onClick={this.changeToRecipe.bind(this, i)} key={i}>
+                        {recipe.title}
+                    </Dropdown.Item>
+                );
+            }
+        }
+
+        return (
+            <Dropdown className="saved-recipes">
+                <Dropdown.Toggle variant="success" id="dropdown-basic">
+                    Choose Recipe
+                </Dropdown.Toggle>
+
+                <Dropdown.Menu>
+                    {dropdownItems}
+                </Dropdown.Menu>
+            </Dropdown>
+        );
+    }
+
     render()
     {
         return (
             <div className="recipe-view">
-                <Form>
+                <div className="recipe-list-dropdown">
+                    {this.recipeListDropdown()}
+                    <button className="new-recipe-button" onClick={this.wipeRecipe.bind(this)}>New Recipe</button>
+                </div>
+                <Form className="recipe-form">
                     <FormControl
-                        as="textarea"
-                        placeholder="Paste ingredients here"
+                        className="recipe-name-input"
+                        placeholder="Add Recipe Name"
+                        value={this.state.titleInput}
+                        onChange={(e) => this.setState({titleInput: e.target.value})}
+                    />
+
+                    <TextareaAutosize
+                        className="recipe-ingredients-input"
+                        placeholder="Add Ingredients"
                         value={this.state.ingredientsInput}
                         onChange={(e) => this.setState({ingredientsInput: e.target.value})}
-                        disabled={!this.state.ingredientsEdit}
+                        style={{resize: 'none', overflow: 'hidden'}}
                     />
-                    <Button onClick={this.processIngredients.bind(this)}>Save Ingredients</Button>
-                </Form>
-                <Form>
-                    <FormControl
-                        as="textarea"
-                        placeholder="Paste instructions here"
+
+                    <TextareaAutosize
+                        className="recipe-instructions-input"
+                        placeholder="Add Instructions"
                         value={this.state.instructionsInput}
                         onChange={(e) => this.setState({instructionsInput: e.target.value})}
-                        disabled={!this.state.instructionsEdit}
+                        style={{resize: 'none', overflow: 'hidden'}}
                     />
-                    <Button onClick={this.processInstructions.bind(this)}>Save Instructions</Button>
                 </Form>
 
-                <Button onClick={this.startListeningAndReading.bind(this)}>Start Reading</Button>
+                <div className="recipe-buttons">
+                    <button onClick={this.saveRecipe.bind(this)}>Save Recipe</button>
+                    <button onClick={this.startListeningAndReading.bind(this)}>Save & Start Reading</button>
+                </div>
             </div>
         );
     }
