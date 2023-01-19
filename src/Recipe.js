@@ -148,7 +148,7 @@ class Recipe extends Component
         if (this.state.ingredientsInput.length > 0)
         {
             var ingredients = this.state.ingredientsInput
-                                .replace(/^\s*-*•*\s*/, '') //Remove leading dashes and dots
+                                .replace(/^\s*-*•*\s*/gm, '') //Remove leading dashes and dots
                                 .replace(/(^[ \t]*\n)/gm, "").trim(); //Remove blank lines
             var ingredientsList = ingredients.toLowerCase().split("\n");
             await this.updateCurrentRecipeAndWait({ingredientsList: ingredientsList, rawIngredients: this.state.ingredientsInput.trim()});
@@ -171,8 +171,25 @@ class Recipe extends Component
                 if (instruction.match(instructionNumberRegex))
                     instruction = instruction.replace(instructionNumberRegex, "");
 
+                //Add | to indicate pauses after adding specific ingredients
+                let multiIngredientRegex = /<.+>,?.*\sand\s<.+>/g;
+                instruction = instruction.replace(multiIngredientRegex,
+                    match => match.replace(/,\s?/g, "|").replaceAll(/(?<!<)[ ]and(?![^<]*>)[ ]/g, "|and")); //Replaces all "," and whitespace before the and with a "|"
+
+                //Replace marked ingredients with the actual raw ingredient (premium feature)
+                let ingredients = instruction.match(/<(.*?)>/g);
+                if (ingredients)
+                {
+                    for (let j = 0; j < ingredients.length; ++j)
+                    {
+                        let ingredient = ingredients[j].replace(/[<>]/g, "");
+                        let amount = this.howMuchIngredient(ingredient);
+                        instruction = instruction.replace(ingredients[j], amount);
+                    }
+                }
+
                 //Splitting at the period allows the bot to read sentence by sentence
-                let subInstructionList = instruction.split(".");
+                let subInstructionList = instruction.split(/[.|\|]/); //Split on "." and "|"
 
                 if (subInstructionList.at(-1).length === 0)
                     subInstructionList.pop(); //Remove blank entries at end of list
@@ -580,6 +597,17 @@ class Recipe extends Component
         }
 
         this.sayText('To continue with the instructions, say "instructions".')
+    }
+
+    howMuchIngredient(ingredient)
+    {
+        ingredient = ingredient.toLowerCase();
+        var matches = this.getCurrentRecipe().ingredientsList.filter(item => item.includes(ingredient));
+
+        if (matches.length === 1)
+            return matches[0];
+        else
+            return ingredient; //Either 0 or multiple matches, and if multiple better not to make a mistake
     }
 
     repeatSpecificIngredient(ingredient)
