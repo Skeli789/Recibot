@@ -12,6 +12,7 @@ const sleep = ms => new Promise(
 
 const READING_INGREDIENTS = 0;
 const READING_INSTRUCTIONS = 1;
+const READING_SPECIFIC_INSTRUCTION = 2;
 
 const RECIPE_STRUCT =
 {
@@ -23,18 +24,18 @@ const RECIPE_STRUCT =
     currentlyReadingIngredientLine: 0,
     currentlyReadingInstructionLine: 0,
     currentlyReadingSubInstructionLine: 0,
+    currentlyReadingSpecificSubInstructionLine: 0, //For repeating a specific step
     lastSpoken: "",
     lastStepSpoken: "",
     readingState: 0,
+    repeatingSpecificStep: 0,
 };
 
 //TODO: Prevent adding multiple recipes with the same name and set limit for recipe title
 //TODO: Add user notice when trying to save a recipe with a title that's already in use
 //TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
-//TODO: Changing recipes when current recipe has been edited should display prompt to save and then if not, wipe changes 
-//TODO: Allow when bot is talking in specific situations (eg. like when the bot is telling you to say "continue")
+//TODO: Changing recipes when current recipe has been edited should display prompt to save and then if not, wipe changes
 //TODO: Prevent starting reading recipe without a recipe title
-//TODO: Saying "stop" in the middle of repeating a specific instruction and then "continue" won't pick up from where it was left off. Need a stack so old instructions don't lose their state
 
 
 class Recipe extends Component
@@ -62,7 +63,6 @@ class Recipe extends Component
             utterance: utterance,
             paused: false,
             waitingForNext: false,
-            cancelWaitingForNext: false,
             stepByStep: false,
             speakingId: 0,
         };
@@ -89,7 +89,6 @@ class Recipe extends Component
     wipeRecipe()
     {
         this.stopTalking();
-        this.tryCancelWaitingForNext();
 
         this.setState
         ({
@@ -98,13 +97,13 @@ class Recipe extends Component
             instructionsInput: "",
             currentRecipe: -1,
             paused: false,
+            waitingForNext: false,
         }); 
     }
 
     async changeToRecipe(recipeId)
     {
         this.stopTalking();
-        this.tryCancelWaitingForNext();
 
         await this.setStateAndWait
         ({
@@ -113,6 +112,7 @@ class Recipe extends Component
             instructionsInput: this.state.recipes[recipeId].rawInstructions,
             currentRecipe: recipeId,
             paused: false,
+            waitingForNext: false,
         });
     }
 
@@ -189,7 +189,7 @@ class Recipe extends Component
                 }
 
                 //Splitting at the period allows the bot to read sentence by sentence
-                let subInstructionList = instruction.split(/[.|\|]/); //Split on "." and "|"
+                let subInstructionList = instruction.split(/[.||]/); //Split on "." and "|"
 
                 if (subInstructionList.at(-1).length === 0)
                     subInstructionList.pop(); //Remove blank entries at end of list
@@ -280,8 +280,6 @@ class Recipe extends Component
                     "shop": this.stopTalking.bind(this), //Commonly heard instead of "stop"
                     "disable": this.disableAnnyang.bind(this),
                     "repeat": this.repeatLastSpoken.bind(this),
-                    "(okay) continue": this.processSayingNext.bind(this),
-                    "(what's) (what is) next": this.processSayingNext.bind(this),
 
                     "continue (reading) ingredients(s)": this.readIngredients.bind(this),
                     "(read) (list) ingredient(s)": this.readIngredientListFromScratch.bind(this),
@@ -290,14 +288,19 @@ class Recipe extends Component
 
                     "continue (reading) instruction(s)": this.readInstructions.bind(this),
                     "(read) (list) instruction(s)": this.readInstructionListFromScratch.bind(this),
-                    "repeat step *number": (number) => this.repeatSpecificStep(number),
+                    "repeat step *number": (number) => this.repeatSpecificStepFromScratch(number),
                     "(read) (repeat) from step *number": (number) => this.readInstructionListFromStep(number),
                     "repeat last step": this.repeatLastStep.bind(this),
                     "which step has (the word) *details": (details) => this.findSpecificStepWith(details),
-                    //"which step am i on"
+                    "which step am i on": this.whichStepIsCurrent.bind(this),
+                    "current step": this.whichStepIsCurrent.bind(this),
 
                     "which recipe (am i cooking)": this.sayCurrentRecipe.bind(this),
                     "switch to *recipe": (recipe) => this.findAndSwitchToRecipe(recipe),
+
+                    //Placed down here to give priority matching to commands above
+                    "(okay) continue": this.processSayingNext.bind(this),
+                    "(what's) (what is) next (*any)": this.processSayingNext.bind(this),
 
                     "*wild": (wild) => console.log("Unknown command: " + wild),
                 };
@@ -306,7 +309,8 @@ class Recipe extends Component
                 annyang.addCommands(commands);
 
                 //Start listening
-                annyang.start();
+                annyang.start({autoRestart: true, continuous: false});
+                annyang.debug(true);
                 this.setState({annyangStarted: true})
             }
 
@@ -338,11 +342,10 @@ class Recipe extends Component
         return speakingId;
     }
 
-    sayText(text, allowContinueDuringSpeech=false)
+    sayText(text)
     {
         //Stop in case it was already talking
         this.stopTalking();
-        this.tryCancelWaitingForNext();
 
         //Setup
         let utterance = this.state.utterance;
@@ -353,14 +356,14 @@ class Recipe extends Component
         ({
             utterance: utterance,
             paused: false,
+            waitingForNext: false,
         });
         this.updateCurrentRecipe({lastSpoken: text});
 
         //Actually talk
         if (this.debugLog())
-            console.log(text)
+            console.log(text);
         window.speechSynthesis.speak(utterance);
-        annyang.resume();
     }
 
     async sayTextAndCheckStopped(textToSay)
@@ -422,7 +425,9 @@ class Recipe extends Component
         {
             if (this.debugLog())
                 console.log("Toggled reading faster");
-            this.setState({waitingForNext: false}); //If waiting for next, toggling faster will start it automatically
+    
+            if (this.state.waitingForNext)
+                this.processSayingNext(); //If waiting for next, toggling faster will start it automatically
         }
 
         this.setState({stepByStep: toggle});
@@ -437,60 +442,38 @@ class Recipe extends Component
     {
         if (!BotIsTalking())
         {
-            if (this.state.waitingForNext)
-            {
-                //Set indicator to escape next while loop and continue in function waiting
-                this.setState({waitingForNext: false, cancelWaitingForNext: false});
-            }
-            else
-            {
-                var readingState = this.getCurrentRecipe().readingState;
+            var readingState = this.getCurrentRecipe().readingState;
 
-                if (readingState === READING_INSTRUCTIONS)
-                    await this.readInstructions();
-                else if (readingState === READING_INGREDIENTS)
-                {
-                    if (this.startedReadingInstructions())
-                        this.sayText('Please say either "continue ingredients" or "continue instructions"');
+            switch (readingState)
+            {
+                case READING_INGREDIENTS:
+                    if (!this.state.waitingForNext && this.startedReadingInstructions()
+                    && this.getCurrentRecipe().currentlyReadingIngredientLine < this.getCurrentRecipe().ingredientsList.length) //If it's finished it should be allowed in to say just "say instructions"
+                        this.sayText('Please say either "continue ingredients" or "continue instructions".');
                     else
                         await this.readIngredients();
-                }
+                    break;
+                case READING_INSTRUCTIONS:
+                    await this.readInstructions();
+                    break;
+                case READING_SPECIFIC_INSTRUCTION:
+                    await this.repeatSpecificStep(this.getCurrentRecipe().repeatingSpecificStep, false);
+                    break;
+                default:
+                    break;
             }
         }
     }
 
-    async tryWaitUntilHearingNext(debug="")
+    shouldWaitForNext()
     {
         if (this.state.stepByStep)
         {
-            if (this.debugLog())
-                console.log("Waiting for next...", debug)
-            await this.setStateAndWait({waitingForNext: true});
-            while (this.state.waitingForNext)
-                await sleep(250);
-
-            await this.setStateAndWait({waitingForNext: false});
-            if (this.state.cancelWaitingForNext)
-            {
-                if (this.debugLog())
-                    console.log("Cancelled waiting for next", debug)
-                this.setState({cancelWaitingForNext: false});
-                return false;
-            }
-            else
-            {
-                if (this.debugLog())
-                    console.log("Heard next!")
-            }
+            this.setState({waitingForNext: true});
+            return true;
         }
 
-        return true;
-    }
-
-    tryCancelWaitingForNext()
-    {
-        if (this.state.waitingForNext)
-            this.setState({waitingForNext: false, cancelWaitingForNext: true});
+        return false;
     }
 
     repeatLastSpoken()
@@ -540,7 +523,6 @@ class Recipe extends Component
         else
         {
             this.updateCurrentRecipe({readingState: READING_INGREDIENTS});
-            this.tryCancelWaitingForNext();
 
             if (this.getCurrentRecipe().currentlyReadingIngredientLine === 0) //Haven't started reading the ingredients
             {
@@ -554,8 +536,6 @@ class Recipe extends Component
 
     async readIngredientListFromScratch()
     {
-        this.tryCancelWaitingForNext();
-
         if (this.ingrdientsListIsEmpty())
             this.sayText("Enter ingredients first.")
         else
@@ -592,11 +572,14 @@ class Recipe extends Component
                 return; //Stopped in the middle of speaking
 
             await this.updateCurrentRecipeAndWait({currentlyReadingIngredientLine: i + 1}); //Here and not at the start of the loop because if the next is cancelled, it should still start from the next step
-            if (!(await this.tryWaitUntilHearingNext()))
-                return; //Gave up waiting for the "next" command
+            if (this.shouldWaitForNext())
+                return; //Exit the function until the user says next
         }
 
-        this.sayText('To continue with the instructions, say "instructions".')
+        if (this.startedReadingInstructions())
+            this.sayText('To continue the instructions, say "continue instructions".');
+        else
+            this.sayText('To continue with the instructions, say "instructions".');
     }
 
     howMuchIngredient(ingredient)
@@ -651,7 +634,6 @@ class Recipe extends Component
 
             if (!this.startedReadingInstructions())
             {
-                this.tryCancelWaitingForNext();
                 if (await this.sayTextAndCheckStopped("You will need to follow these steps:"))
                     return; //Stopped in the middle of speaking
             }
@@ -662,8 +644,6 @@ class Recipe extends Component
 
     async readInstructionListFromScratch()
     {
-        this.tryCancelWaitingForNext();
-
         if (this.instructionsListIsEmpty())
             this.sayText("Enter instructions first.");
         else
@@ -699,7 +679,8 @@ class Recipe extends Component
                     if (j === 0)
                         textToSay = `Step ${i + 1}. ` + textToSay;
                     else
-                        textToSay = `Continuing step ${i + 1}.` + textToSay;
+                    else if (!this.state.waitingForNext)
+                        textToSay = `Continuing step ${i + 1}. ` + textToSay;
                 }
 
                 this.updateCurrentRecipe({lastStepSpoken: textToSay})
@@ -707,8 +688,8 @@ class Recipe extends Component
                     return; //Stopped in the middle of speaking
 
                 await this.updateCurrentRecipeAndWait({currentlyReadingSubInstructionLine: j + 1}); //Here and not at the start of the loop because if the function leaves during the next return, the last step will be repeated
-                if (!(await this.tryWaitUntilHearingNext()))
-                    return; //Gave up waiting for the "next" command
+                if (this.shouldWaitForNext())
+                    return; //Exit the function until the user says next
             }
 
             await this.updateCurrentRecipeAndWait
@@ -721,6 +702,11 @@ class Recipe extends Component
         this.sayText(`You've reached the end of the instructions for ${this.getCurrentRecipe().title}!`);
     }
 
+    isNotValidStepNumber(i)
+    {
+        return isNaN(i) || i >= this.getCurrentRecipe().instructionsList.length || i < 0;
+    }
+
     async readInstructionListFromStep(step)
     {
         this.stopTalking();
@@ -729,10 +715,9 @@ class Recipe extends Component
         {
             let i = ParseStepNumber(step);
 
-            if (isNaN(i) || i >= this.getCurrentRecipe().instructionsList.length || i < 0)
+            if (this.isNotValidStepNumber(i))
                 throw(new Error(`${i} is out of bounds of the instructions list`));
 
-            this.tryCancelWaitingForNext();
             await this.updateCurrentRecipeAndWait
             ({
                 readingState: READING_INSTRUCTIONS,
@@ -751,38 +736,16 @@ class Recipe extends Component
         }
     }
 
-    async repeatSpecificStep(step)
+    async repeatSpecificStepFromScratch(step)
     {
-        let firstInstruction = true;
-        var instructionList = this.getCurrentRecipe().instructionsList;
-
         try
         {
             let i = ParseStepNumber(step);
 
-            if (isNaN(i) || i >= instructionList.length || i < 0)
+            if (this.isNotValidStepNumber(i))
                 throw(new Error(`${i} is out of bounds of the instructions list`));
 
-            this.tryCancelWaitingForNext();
-
-            for (let j = 0; j < instructionList[i].length; ++j)
-            {
-                let textToSay = instructionList[i][j];
-                
-                if (firstInstruction)
-                {
-                    textToSay = `Step ${i + 1}. ` +  textToSay;
-                    firstInstruction = false;
-                }
-
-                if (await this.sayTextAndCheckStopped(textToSay))
-                    return; //Stopped in the middle of speaking
-
-                if (!(await this.tryWaitUntilHearingNext()))
-                    return; //Gave up waiting for the "next" command
-            }
-
-            this.sayText(`That is the end of step ${step}. To continue from where you left off, say "continue". To continue from the next step, say "read from step ${i + 2}".`, true);
+            await this.repeatSpecificStep(i, true);
         }
         catch (e)
         {
@@ -791,6 +754,44 @@ class Recipe extends Component
                 console.log(error);
             this.sayText(error);
         }
+    }
+
+    async repeatSpecificStep(i, startFromScratch)
+    {
+        var instructionList = this.getCurrentRecipe().instructionsList;
+        var firstInstruction = true;
+
+        this.updateCurrentRecipe
+        ({
+            readingState: READING_SPECIFIC_INSTRUCTION,
+            repeatingSpecificStep: i,
+        });
+
+        if (startFromScratch)
+            await this.updateCurrentRecipeAndWait({currentlyReadingSpecificSubInstructionLine: 0});
+
+        for (let j = this.getCurrentRecipe().currentlyReadingSpecificSubInstructionLine; j < instructionList[i].length; ++j)
+        {
+            let textToSay = instructionList[i][j];
+
+            if (firstInstruction)
+            {
+                firstInstruction = false;
+                if (j === 0)
+                    textToSay = `Step ${i + 1}. ` +  textToSay;
+                else if (!this.state.waitingForNext)
+                    textToSay = `Continuing step ${i + 1}. ` +  textToSay;
+            }
+
+            if (await this.sayTextAndCheckStopped(textToSay))
+                return; //Stopped in the middle of speaking
+
+            await this.updateCurrentRecipeAndWait({currentlyReadingSpecificSubInstructionLine: j + 1}); //Here and not at the start of the loop because if the function leaves during the next return, the last step will be repeated
+            if (this.shouldWaitForNext())
+                return; //Exit the function until the user says next
+        }
+
+        this.sayText(`That is the end of step ${i + 1}. To continue from where you left off, say "continue instructions". To continue from the next step, say "read from step ${i + 2}".`);
     }
 
     findSpecificStepWith(details)
@@ -810,6 +811,36 @@ class Recipe extends Component
         }
 
         this.sayText(`No step was found with the phrase "${details}".`);
+    }
+
+    whichStepIsCurrent()
+    {
+        let textToSay;
+        let readingState = this.getCurrentRecipe().readingState;
+        let currStep = this.getCurrentRecipe().currentlyReadingInstructionLine;
+        let instructionList = this.getCurrentRecipe().instructionsList;
+        let recipeTitle = this.getCurrentRecipe().title;
+
+        if (readingState === READING_SPECIFIC_INSTRUCTION
+        && this.getCurrentRecipe().currentlyReadingSpecificSubInstructionLine <
+            instructionList[this.getCurrentRecipe().repeatingSpecificStep].length) //Didn't finish specific step yet
+        {
+            textToSay = `Currently repeating step ${this.getCurrentRecipe().repeatingSpecificStep + 1} of ${recipeTitle}.`;
+
+            if (currStep < instructionList.length)
+                textToSay += ` And currently paused reading step ${currStep + 1}.`;
+        }
+        else
+        {
+            if (currStep >= instructionList.length)
+                textToSay = `The instructions of ${recipeTitle} are finished.`;
+            else if (!this.startedReadingInstructions())
+                textToSay = `The instructions of ${recipeTitle} have not been started. To read the instructions, say "instructions".`;   
+            else
+                textToSay = `Currently reading step ${currStep + 1} of ${recipeTitle}.`;
+        }
+
+        this.sayText(textToSay);
     }
 
 
