@@ -28,14 +28,22 @@ const RECIPE_STRUCT =
     lastSpoken: "",
     lastStepSpoken: "",
     readingState: 0,
-    repeatingSpecificStep: 0,
+    repeatingSpecificStep: -1,
 };
+const IS_TEST_ENVIRONMENT = window['speechSynthesis'] == null;
 
+//UI TODO//
 //TODO: Prevent adding multiple recipes with the same name and set limit for recipe title
 //TODO: Add user notice when trying to save a recipe with a title that's already in use
 //TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
 //TODO: Changing recipes when current recipe has been edited should display prompt to save and then if not, wipe changes
 //TODO: Prevent starting reading recipe without a recipe title
+//TODO: When clicking save, the step numbers should automatically be remoevd and readded to the input box also to be in-line with what the bot says
+//TODO: Voice choice
+//TODO: Command list help button
+
+//Backend TODO//
+//TODO: Timer functionality ("set a timer for X", "(how much) time (is left) on the timer", "stop timer"). Should be able to set multiple and give each a name (and ofc recipe title should be factored in).
 
 
 class Recipe extends Component
@@ -43,11 +51,15 @@ class Recipe extends Component
     constructor(props)
     {
         super(props);
-
-        let utterance = new SpeechSynthesisUtterance();
-        let voices = window.speechSynthesis.getVoices();
-        utterance.voice = voices[1]; //Nicer male voice
         // localStorage.recipes = "[]";
+
+        var utterance = null;
+        if(!IS_TEST_ENVIRONMENT)
+        {
+            utterance = new SpeechSynthesisUtterance();
+            let voices = window.speechSynthesis.getVoices();
+            utterance.voice = voices[1]; //Nicer male voice
+        }
 
         this.state =
         {
@@ -86,6 +98,16 @@ class Recipe extends Component
         return this.state.recipes[this.state.currentRecipe];
     }
 
+    getCurrentAudibleStep()
+    {
+        return this.getCurrentRecipe().currentlyReadingInstructionLine + 1;
+    }
+
+    getRepeatedAudibleSpecificStep()
+    {
+        return this.getCurrentRecipe().repeatingSpecificStep + 1;
+    }
+
     wipeRecipe()
     {
         this.stopTalking();
@@ -119,6 +141,9 @@ class Recipe extends Component
     async updateCurrentRecipe(newObj, wait=false)
     {
         var currentRecipe = this.getCurrentRecipe();
+        if (currentRecipe == null)
+            return;
+
         var recipeList = this.state.recipes;
 
         for (let key of Object.keys(newObj))
@@ -190,6 +215,7 @@ class Recipe extends Component
 
                 //Splitting at the period allows the bot to read sentence by sentence
                 let subInstructionList = instruction.split(/[.||]/); //Split on "." and "|"
+                subInstructionList = subInstructionList.map(string => string.trim());
 
                 if (subInstructionList.at(-1).length === 0)
                     subInstructionList.pop(); //Remove blank entries at end of list
@@ -265,41 +291,53 @@ class Recipe extends Component
                     console.log("Starting Annyang");
 
                 //Define commands
-                var commands =
+                const commands =
                 {
-                    "hello": () => this.sayText("Hello, I am a recipe bot. But you can call me Recibot."),
-                    "recibot": () => this.sayText("What would you like, master?"),
-                    "(read) slower": this.toggleStepByStep.bind(this, true),
-                    "(read) flower": this.toggleStepByStep.bind(this, true), //Commonly heard instead of "slower"
-                    "(read) lower": this.toggleStepByStep.bind(this, true),
-                    "(read) slowly": this.toggleStepByStep.bind(this, true),
-                    "(read) faster": this.toggleStepByStep.bind(this, false),
-                    "pause": this.pauseTalking.bind(this),
-                    "resume": this.resumeTalking.bind(this),
-                    "stop": this.stopTalking.bind(this),
-                    "shop": this.stopTalking.bind(this), //Commonly heard instead of "stop"
-                    "disable": this.disableAnnyang.bind(this),
-                    "repeat": this.repeatLastSpoken.bind(this),
+                    //Generic
+                    "hello":   () => this.sayText("Hello, I am a recipe bot. But you can call me Recibot."),
+                    "recibot": () => this.sayText("What can I help with?"),
 
-                    "continue (reading) ingredients(s)": this.readIngredients.bind(this),
-                    "(read) (list) ingredient(s)": this.readIngredientListFromScratch.bind(this),
+                    //Voice Control
+                    "slowly":  this.toggleStepByStep.bind(this, true),
+                    "slower":  this.toggleStepByStep.bind(this, true),
+                    "flower":  this.toggleStepByStep.bind(this, true), //Can be heard instead of "slower"
+                    "lower":   this.toggleStepByStep.bind(this, true), //Can be heard instead of "slower"
+                    "faster":  this.toggleStepByStep.bind(this, false),
+                    "pause":   this.pauseTalking.bind(this),
+                    "resume":  this.resumeTalking.bind(this),
+                    "stop":    this.stopTalking.bind(this),
+                    "shop":    this.stopTalking.bind(this), //Commonly heard instead of "stop"
+                    "disable": this.disableAnnyang.bind(this),
+                    "repeat":  this.repeatLastSpoken.bind(this),
+
+                    //Ingredients Commands
+                    "continue (reading) ingredient(s)":     this.readIngredients.bind(this),
+                    "(read) (list) ingredient(s)":          this.readIngredientListFromScratch.bind(this),
                     "how much *ingredient": (ingredient) => this.repeatSpecificIngredient(ingredient),
                     "how many *ingredient": (ingredient) => this.repeatSpecificIngredient(ingredient),
 
-                    "continue (reading) instruction(s)": this.readInstructions.bind(this),
-                    "(read) (list) instruction(s)": this.readInstructionListFromScratch.bind(this),
-                    "repeat step *number": (number) => this.repeatSpecificStepFromScratch(number),
-                    "(read) (repeat) from step *number": (number) => this.readInstructionListFromStep(number),
-                    "repeat last step": this.repeatLastStep.bind(this),
+                    //Instructions Commands
+                    "continue (reading) instruction(s)":    this.readInstructions.bind(this),
+                    "continue repeating step(s)":           this.continueRepeatingSpecificStep.bind(this),
+                    "(read) (list) instruction(s)":         this.readInstructionListFromScratch.bind(this),
+                    "repeat last step":                     this.repeatLastStep.bind(this),
+                    "read from step *number":   (number) => this.readInstructionListFromStep(number),
+                    "read step *number":        (number) => this.repeatSpecificStepFromScratch(number),
+                    "repeat step *number":      (number) => this.repeatSpecificStepFromScratch(number),
+
+                    //Instructions Queries
                     "which step has (the word) *details": (details) => this.findSpecificStepWith(details),
                     "which step am i on": this.whichStepIsCurrent.bind(this),
-                    "current step": this.whichStepIsCurrent.bind(this),
-
-                    "which recipe (am i cooking)": this.sayCurrentRecipe.bind(this),
-                    "switch to *recipe": (recipe) => this.findAndSwitchToRecipe(recipe),
+                    "current step":       this.whichStepIsCurrent.bind(this),
+ 
+                    //Recipe Queries
+                    "which recipe (am i cooking)":    this.sayCurrentRecipe.bind(this), //NEED TESTING//
+                    "what's cooking":                 this.sayCurrentRecipe.bind(this), //NEED TESTING//
+                    "current recipe":                 this.sayCurrentRecipe.bind(this), //NEED TESTING//
+                    "switch to *recipe":  (recipe) => this.findAndSwitchToRecipe(recipe), //NEED TESTING//
 
                     //Placed down here to give priority matching to commands above
-                    "(okay) continue": this.processSayingNext.bind(this),
+                    "(okay) continue":                this.processSayingNext.bind(this),
                     "(what's) (what is) next (*any)": this.processSayingNext.bind(this),
 
                     "*wild": (wild) => console.log("Unknown command: " + wild),
@@ -317,11 +355,13 @@ class Recipe extends Component
             return true;
         }
 
+        console.log("Annyang is not available");
         return false;
     }
 
     disableAnnyang()
     {
+        //TODO: Should not be available to the general public
         annyang.abort();
         this.sayText("The microphone has been turned off.");
     }
@@ -349,9 +389,14 @@ class Recipe extends Component
 
         //Setup
         let utterance = this.state.utterance;
-        let voices = window.speechSynthesis.getVoices();
-        utterance.text = text;
-        utterance.voice = voices[1]; //Nicer male voice
+
+        if (!IS_TEST_ENVIRONMENT) //No speech synthesis in a test envrionment
+        {
+            let voices = window.speechSynthesis.getVoices();
+            utterance.text = text;
+            utterance.voice = voices[1]; //Nicer male voice
+        }
+
         this.setState
         ({
             utterance: utterance,
@@ -363,7 +408,9 @@ class Recipe extends Component
         //Actually talk
         if (this.debugLog())
             console.log(text);
-        window.speechSynthesis.speak(utterance);
+
+        if (!IS_TEST_ENVIRONMENT)
+            window.speechSynthesis.speak(utterance);
     }
 
     async sayTextAndCheckStopped(textToSay)
@@ -513,7 +560,9 @@ class Recipe extends Component
     //Ingredients Commands//
     ingrdientsListIsEmpty()
     {
-        return this.getCurrentRecipe().ingredientsList.length === 0;
+        return this.getCurrentRecipe() == null
+            || this.getCurrentRecipe().ingredientsList == null
+            || this.getCurrentRecipe().ingredientsList.length === 0;
     }
 
     async readIngredients()
@@ -577,7 +626,17 @@ class Recipe extends Component
         }
 
         if (this.startedReadingInstructions())
-            this.sayText('To continue the instructions, say "continue instructions".');
+        {
+            if (this.repeatingSpecificInstruction())
+                this.sayText(`To continue repeating step ${this.getRepeatedAudibleSpecificStep()}, say "continue repeating step".`
+                           + ` To continue the instructions from step ${this.getCurrentAudibleStep()}, say "continue instructions".`);
+            else
+                this.sayText('To continue the instructions, say "continue instructions".');
+        }
+        else if (this.repeatingSpecificInstruction())
+        {
+            this.sayText(`To continue reading just step ${this.getRepeatedAudibleSpecificStep()}, say "continue repeating step".`);
+        }
         else
             this.sayText('To continue with the instructions, say "instructions".');
     }
@@ -595,8 +654,23 @@ class Recipe extends Component
 
     repeatSpecificIngredient(ingredient)
     {
+        var matches, ingredientWords;
         ingredient = ingredient.toLowerCase();
-        var matches = this.getCurrentRecipe().ingredientsList.filter(item => item.includes(ingredient));
+        ingredientWords = ingredient.split(" ");
+
+        if (ingredientWords.length >= 2) //Do a straight text match for multiple words
+        {
+            matches = this.getCurrentRecipe().ingredientsList
+                        .filter(item => item.includes(ingredient)
+                                    || (ingredient.endsWith("s") && item.includes(ingredient.slice(0, -1)))); //Allows matching "oils" to "1 tbsp oil"
+        }
+        else
+        {
+            matches = this.getCurrentRecipe().ingredientsList
+                        .filter(item => item.split(" ").indexOf(ingredient) !== -1
+                                    || item.split(" ").indexOf(ingredient + "s") !== -1 //Allows matching "chip" to "1 bag of chips"
+                                    || (ingredient.endsWith("s") && item.split(" ").indexOf((ingredient.slice(0, -1))) !== -1)); //Allows matching "oils" to "1 tbsp oil"
+        }
 
         if (matches.length === 0)
             this.sayText(`${ingredient} was not found in the ingredients.`);
@@ -614,7 +688,9 @@ class Recipe extends Component
     //Instructions Commands//
     instructionsListIsEmpty()
     {
-        return this.getCurrentRecipe().instructionsList.length === 0;
+        return this.getCurrentRecipe() == null
+            || this.getCurrentRecipe().instructionsList == null
+            || this.getCurrentRecipe().instructionsList.length === 0;
     }
 
     startedReadingInstructions()
@@ -623,6 +699,14 @@ class Recipe extends Component
             || this.getCurrentRecipe().currentlyReadingSubInstructionLine !== 0;
     }
 
+    repeatingSpecificInstruction()
+    {
+        var specificStep = this.getCurrentRecipe().repeatingSpecificStep;
+
+        return specificStep >= 0
+            && this.getCurrentRecipe().currentlyReadingSpecificSubInstructionLine <
+                this.getCurrentRecipe().instructionsList[specificStep].length;
+    }
 
     async readInstructions()
     {
@@ -630,7 +714,11 @@ class Recipe extends Component
             this.sayText("Enter instructions first.");
         else
         {
-            this.updateCurrentRecipe({readingState: READING_INSTRUCTIONS});
+            this.updateCurrentRecipe
+            ({
+                readingState: READING_INSTRUCTIONS,
+                repeatingSpecificStep: -1, //Cancel if one was in the middle
+            });
 
             if (!this.startedReadingInstructions())
             {
@@ -641,7 +729,7 @@ class Recipe extends Component
             await this.readInstructionList(); //Didn't stop in the middle of speaking so continue to the instructions
         }
     }
-
+        
     async readInstructionListFromScratch()
     {
         if (this.instructionsListIsEmpty())
@@ -653,6 +741,7 @@ class Recipe extends Component
                 readingState: READING_INSTRUCTIONS,
                 currentlyReadingInstructionLine: 0,
                 currentlyReadingSubInstructionLine: 0,
+                repeatingSpecificStep: -1, //Cancel if one was in the middle
             });
 
             if (!(await this.sayTextAndCheckStopped("You will need to follow these steps:")))
@@ -664,7 +753,7 @@ class Recipe extends Component
     {
         var i, j;
         var instructionsList = this.getCurrentRecipe().instructionsList;
-    
+
         for (i = this.getCurrentRecipe().currentlyReadingInstructionLine; i < instructionsList.length; ++i)
         {
             let firstInstruction = true; //Inside i loop so it says the step name and then continues to the first sentence in the step
@@ -678,7 +767,6 @@ class Recipe extends Component
                     firstInstruction = false;
                     if (j === 0)
                         textToSay = `Step ${i + 1}. ` + textToSay;
-                    else
                     else if (!this.state.waitingForNext)
                         textToSay = `Continuing step ${i + 1}. ` + textToSay;
                 }
@@ -749,11 +837,17 @@ class Recipe extends Component
         }
         catch (e)
         {
-            let error = `"${step}" is not a valid step number`;
-            if (this.debugLog())
-                console.log(error);
+            let error = `"${step}" is not a valid step number.`;
             this.sayText(error);
         }
+    }
+
+    async continueRepeatingSpecificStep()
+    {
+        if (this.getCurrentRecipe().repeatingSpecificStep < 0)
+            this.sayText(`No step is currently being repeated. To read a specific step, say something like "repeat step 2".`);
+        else
+            await this.repeatSpecificStep(this.getCurrentRecipe().repeatingSpecificStep, false);
     }
 
     async repeatSpecificStep(i, startFromScratch)
@@ -796,21 +890,68 @@ class Recipe extends Component
 
     findSpecificStepWith(details)
     {
+        var textToSay;
+        var matchedSteps = [];
+        var searchForMultiWord = details.split(" ").length !== 1;
         var instructionList = this.getCurrentRecipe().instructionsList;
+        details = details.toLowerCase();
 
         for (let i = 0; i < instructionList.length; ++i)
         {
             for (let j = 0; j < instructionList[i].length; ++j)
             {
-                if (instructionList[i][j].includes(details))
+                if (!searchForMultiWord)
                 {
-                    this.sayText(`Step ${i} contains the phrase "${details}".`);
-                    return;
+                    if (instructionList[i][j].split(" ").indexOf(details) !== -1 //Match whole word only
+                    || instructionList[i][j].split(" ").indexOf(details + "s") !== -1 //Match whole word only again but also matches "Egg to Eggs"
+                    || (details.endsWith("s") && instructionList[i][j].split(" ").indexOf(details.slice(0, -1)) !== -1)) //Egg details is "eggs" but step says "egg"
+                    {
+                        matchedSteps.push(i + 1);
+                        break; //No point matching this step more times
+                    }
+                }
+                else //Searching for a multi-word phrase
+                {
+                    let stepWords = instructionList[i][j].split(" ");
+                    let phraseWords = details.split(" ");
+
+                    if (stepWords.indexOf(phraseWords[0]) !== -1) //First part of phrase was found in this step
+                    {
+                        let found = true;
+
+                        for (let k = 1; k < phraseWords.length; ++k) //Search for rest of phrase in step
+                        {
+                            if (stepWords.indexOf(phraseWords[k], stepWords.indexOf(phraseWords[k - 1]) + 1) === -1)
+                            {
+                                found = false;
+                                break;
+                            }
+                        }
+
+                        if (found)
+                        {
+                            matchedSteps.push(i + 1);
+                            break; //No point matching this step more times
+                        }
+                    }
                 }
             }
         }
 
-        this.sayText(`No step was found with the phrase "${details}".`);
+        if (matchedSteps.length === 0)
+            textToSay = `No step was found with `;
+        else if (matchedSteps.length === 1)
+            textToSay = `Step ${matchedSteps[0]} contains `;
+        else if (matchedSteps.length === 2)
+            textToSay = `Steps ${matchedSteps[0]} and ${matchedSteps[1]} both contain `;
+        else
+        {
+            textToSay = "Steps " + matchedSteps.slice(0, -1).join(', ') //Connect all steps except for the last two with a comma
+                      + ', and ' + matchedSteps[matchedSteps.length - 1] + " contain "; //Connect the last step with an and
+        }
+
+        textToSay += `the phrase "${details}".`;
+        this.sayText(textToSay);
     }
 
     whichStepIsCurrent()
@@ -825,7 +966,7 @@ class Recipe extends Component
         && this.getCurrentRecipe().currentlyReadingSpecificSubInstructionLine <
             instructionList[this.getCurrentRecipe().repeatingSpecificStep].length) //Didn't finish specific step yet
         {
-            textToSay = `Currently repeating step ${this.getCurrentRecipe().repeatingSpecificStep + 1} of ${recipeTitle}.`;
+            textToSay = `Currently repeating step ${this.getRepeatedAudibleSpecificStep()} of ${recipeTitle}.`;
 
             if (currStep < instructionList.length)
                 textToSay += ` And currently paused reading step ${currStep + 1}.`;
@@ -833,9 +974,9 @@ class Recipe extends Component
         else
         {
             if (currStep >= instructionList.length)
-                textToSay = `The instructions of ${recipeTitle} are finished.`;
+                textToSay = `The instructions for ${recipeTitle} are finished.`;
             else if (!this.startedReadingInstructions())
-                textToSay = `The instructions of ${recipeTitle} have not been started. To read the instructions, say "instructions".`;   
+                textToSay = `The instructions for ${recipeTitle} have not been started. To read the instructions, say "instructions".`;   
             else
                 textToSay = `Currently reading step ${currStep + 1} of ${recipeTitle}.`;
         }
@@ -852,6 +993,9 @@ class Recipe extends Component
 
     async findAndSwitchToRecipe(recipeDetails)
     {
+        var currentRecipeTitle = this.getCurrentRecipe().title;
+        console.log(this.state.recipes)
+
         let possibleRecipeIds = this.state.recipes.reduce((ids, recipe, i) =>
         {
             if (recipe.title.toLowerCase().includes(recipeDetails.toLowerCase()))
@@ -859,12 +1003,17 @@ class Recipe extends Component
             return ids;
         }, []); //Creates a list of ids where the recipe title matches the given details
 
+        //Filter out current recipe only if multiple because we still want to match for 1
+        if (possibleRecipeIds.length >= 2)
+            possibleRecipeIds = possibleRecipeIds.filter(recipeId => this.state.recipes[recipeId].title !== currentRecipeTitle);
+
+        //Process based on amount matched
         if (possibleRecipeIds.length === 0)
             this.sayText(`No recipes were found for "${recipeDetails}".`);
         else if (possibleRecipeIds.length === 1)
         {
             if (possibleRecipeIds[0] === this.state.currentRecipe)
-                this.sayText(`You're already cooking ${this.getCurrentRecipe().title}.`)
+                this.sayText(`You're already cooking ${currentRecipeTitle}.`)
             else
             {
                 await this.changeToRecipe(possibleRecipeIds[0]);
@@ -877,7 +1026,7 @@ class Recipe extends Component
             for (let recipeId of possibleRecipeIds)
                 textToSay += this.state.recipes[recipeId].title + ". ";
 
-            this.sayText(textToSay);
+            this.sayText(textToSay.trim());
         }
     }
 
@@ -960,6 +1109,9 @@ class Recipe extends Component
 
 function BotIsTalking()
 {
+    if (IS_TEST_ENVIRONMENT)
+        return false;
+
     return window.speechSynthesis.speaking;
 }
 
