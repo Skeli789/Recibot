@@ -172,7 +172,8 @@ function ExpectAllIngredientsRead()
 
 //Tests//
 
-var component, log, titleInput, ingredientsInput, instructionsInput, saveButton, startReadingButton, newRecipeButton;
+var component, log, titleInput, ingredientsInput, instructionsInput, saveButton, startReadingButton, newRecipeButton, recipeListButton;
+var welcomeMessage = 'Welcome! Please say either "ingredients" or "instructions"';
 
 beforeEach(() =>
 {
@@ -184,12 +185,17 @@ beforeEach(() =>
     saveButton = component.getByText("Save Recipe");
     startReadingButton = component.getByText("Save & Start Reading");
     newRecipeButton = component.getByText("New Recipe");
+    recipeListButton = component.getByText("Choose Recipe");
     log = jest.spyOn(console, 'log').mockImplementation(() => {});
 });
 
-test('form can be filled out and reset', () => {
-    //Saving an empty form should do nothing
+test('form can be filled out and reset', async () => {
+    var button;
+
+    //Saving an empty form should bring up an error pop-up
     act(() => {fireEvent.click(saveButton)});
+    button = component.getByText("Okay");
+    act(() => {fireEvent.click(button)});
 
     //Fill out the input fields
     FillRecipe1();
@@ -202,10 +208,95 @@ test('form can be filled out and reset', () => {
     //Click the new recipe button
     act(() => {fireEvent.click(newRecipeButton)});
 
+    //Say no to the delete changes confirmation
+    button = component.getByText("No");
+    act(() => {fireEvent.click(button)});
+
+    //Confirm changes were not wiped
+    expect(titleInput.value).toBe(TEST_TITLE_1);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_1);
+    expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_1);
+
+    //Click the new recipe button
+    act(() => {fireEvent.click(newRecipeButton)});
+
+    //Say yes to the delete changes confirmation
+    button = component.getByText("Yes");
+    await act(async () => {fireEvent.click(button)});
+
     //Confirm the inputs were wiped
     expect(titleInput.value).toBe("");
     expect(ingredientsInput.value).toBe("");
     expect(instructionsInput.value).toBe("");
+});
+
+test('form can be filled out multiple times and recipes can be switched between', async () => {
+    var button;
+
+    //Save recipe 1
+    FillRecipe1();
+    await act(async () => {fireEvent.click(saveButton)});
+
+    //Save recipe 2
+    act(() => {fireEvent.click(newRecipeButton)});
+    FillRecipe2();
+    await act(async () => {fireEvent.click(saveButton)});
+
+    //Confirm the inputs were filled out
+    expect(titleInput.value).toBe(TEST_TITLE_2);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_2);
+    expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_2);
+
+    //Find and switch to recipe 1 in the recipe dropdown
+    act(() => {fireEvent.click(recipeListButton)});
+    await act(async () => {fireEvent.click(recipeListButton)});
+    button =  component.getByText(TEST_TITLE_1);
+    act(() => {fireEvent.click(button)});
+
+    //Confirm the inputs changed back
+    expect(titleInput.value).toBe(TEST_TITLE_1);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_1);
+    expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_1);
+
+    //Make slight change and try switching to recipe 2
+    fireEvent.change(titleInput, {target: {value: TEST_TITLE_1 + "a"}});
+    await act(async () => {fireEvent.click(recipeListButton)});
+    button =  component.getByText(TEST_TITLE_2);
+    act(() => {fireEvent.click(button)});
+
+    //Say no to the delete changes confirmation
+    button = component.getByText("No");
+    act(() => {fireEvent.click(button)});
+
+    //Confirm the inputs didn't change
+    expect(titleInput.value).toBe(TEST_TITLE_1 + "a");
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_1);
+    expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_1);
+
+    //Try switching to recipe 2 again
+    await act(async () => {fireEvent.click(recipeListButton)});
+    button =  component.getByText(TEST_TITLE_2);
+    act(() => {fireEvent.click(button)});
+
+    //Say yes to the delete changes confirmation
+    button = component.getByText("Yes");
+    await act(async () => {fireEvent.click(button)});
+
+    //Confirm the inputs changed
+    expect(titleInput.value).toBe(TEST_TITLE_2);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_2);
+    expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_2);
+
+    //Find and switch recipe 1 in the recipe dropdown
+    act(() => {fireEvent.click(recipeListButton)});
+    await act(async () => {fireEvent.click(recipeListButton)});
+    button =  component.getByText(TEST_TITLE_1);
+    act(() => {fireEvent.click(button)});
+
+    //Confirm the inputs changed back
+    expect(titleInput.value).toBe(TEST_TITLE_1);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_1);
+    expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_1);
 });
 
 test('saving prevented with empty title', async () =>
@@ -213,6 +304,7 @@ test('saving prevented with empty title', async () =>
     await act(async () => {fireEvent.click(saveButton)});
     let res = component.queryByText("A title is needed for the recipe.")
     expect(res).toBeTruthy();
+    expect(log).not.toHaveBeenCalledWith(welcomeMessage);
 });
 
 test('start reading prevented with empty title', async () =>
@@ -220,6 +312,7 @@ test('start reading prevented with empty title', async () =>
     await act(async () => {fireEvent.click(startReadingButton)});
     let res = component.queryByText("A title is needed for the recipe.")
     expect(res).toBeTruthy();
+    expect(log).not.toHaveBeenCalledWith(welcomeMessage);
 });
 
 test('saving prevented with empty ingredients', async () =>
@@ -229,6 +322,7 @@ test('saving prevented with empty ingredients', async () =>
     await act(async () => {fireEvent.click(saveButton)});
     let res = component.queryByText("Ingredients are needed for the recipe.")
     expect(res).toBeTruthy();
+    expect(log).not.toHaveBeenCalledWith(welcomeMessage);
 });
 
 test('start reading prevented with empty ingredients', async () =>
@@ -238,6 +332,7 @@ test('start reading prevented with empty ingredients', async () =>
     await act(async () => {fireEvent.click(startReadingButton)});
     let res = component.queryByText("Ingredients are needed for the recipe.")
     expect(res).toBeTruthy();
+    expect(log).not.toHaveBeenCalledWith(welcomeMessage);
 });
 
 test('saving prevented with empty instructions', async () =>
@@ -248,6 +343,7 @@ test('saving prevented with empty instructions', async () =>
     await act(async () => {fireEvent.click(saveButton)});
     let res = component.queryByText("Instructions are needed for the recipe.")
     expect(res).toBeTruthy();
+    expect(log).not.toHaveBeenCalledWith(welcomeMessage);
 });
 
 test('start reading prevented with empty instructions', async () =>
@@ -258,6 +354,7 @@ test('start reading prevented with empty instructions', async () =>
     await act(async () => {fireEvent.click(startReadingButton)});
     let res = component.queryByText("Instructions are needed for the recipe.")
     expect(res).toBeTruthy();
+    expect(log).not.toHaveBeenCalledWith(welcomeMessage);
 });
 
 test('start reading gives initial instructions', async () =>

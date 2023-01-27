@@ -39,7 +39,6 @@ const IS_TEST_ENVIRONMENT = window['speechSynthesis'] == null;
 //UI TODO//
 //TODO: Prevent adding multiple recipes with the same name and set limit for recipe title
 //TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
-//TODO: Changing recipes when current recipe has been edited should display prompt to save and then if not, wipe changes
 //TODO: When clicking save, the step numbers should automatically be remoevd and readded to the input box also to be in-line with what the bot says
 //TODO: Voice choice
 //TODO: Command list help button
@@ -70,6 +69,7 @@ class Recipe extends Component
             instructionsInput: "",
             recipes: this.getInitialRecipes(),
             currentRecipe: -1,
+            savedChanges: true,
             debugLog: true,
 
             //Voice and Mic
@@ -82,9 +82,28 @@ class Recipe extends Component
         };
     }
 
+    componentDidMount()
+    {
+        window.addEventListener('beforeunload', this.tryPreventLeavingPage.bind(this));
+    }
+
+    componentWillUnmount()
+    {
+        window.removeEventListener('beforeunload', this.tryPreventLeavingPage.bind(this));
+    }
+
     async setStateAndWait(newState)
     {
         return new Promise(resolve => this.setState(newState, resolve));
+    }
+
+    tryPreventLeavingPage(e)
+    {
+        if (!this.state.savedChanges)
+        {
+            e.preventDefault();
+            e.returnValue = true; //Display pop-up warning
+        }
     }
 
     debugLog()
@@ -110,10 +129,41 @@ class Recipe extends Component
         return this.getCurrentRecipe().repeatingSpecificStep + 1;
     }
 
-    wipeRecipe()
+    updateInputField(field, newValue)
+    {
+        var newObj = {savedChanges: false};
+        newObj[field] = newValue;
+        this.setState(newObj);
+    }
+
+    tryWipeRecipe()
     {
         this.stopTalking();
 
+        if (!this.state.savedChanges)
+        {
+            PopUp.fire
+            ({
+                title: "You have unsaved changed!\nReset the recipe anyway?",
+                showConfirmButton: false,
+                showCancelButton: true,
+                showDenyButton: true,
+                cancelButtonText: `No`,
+                denyButtonText: `Yes`,
+                icon: 'warning',
+                scrollbarPadding: false,
+            }).then((result) =>
+            {
+                if (result.isDenied) //Denied means released because it's the red button
+                    this.wipeRecipe();
+            });
+        }
+        else
+            this.wipeRecipe();
+    }
+
+    wipeRecipe()
+    {
         this.setState
         ({
             titleInput: "",
@@ -122,7 +172,34 @@ class Recipe extends Component
             currentRecipe: -1,
             paused: false,
             waitingForNext: false,
+            savedChanges: true,
         }); 
+    }
+
+    tryChangeToRecipe(recipeId)
+    {
+        this.stopTalking();
+
+        if (!this.state.savedChanges)
+        {
+            PopUp.fire
+            ({
+                title: "You have unsaved changed!\nChange recipes anyway?",
+                showConfirmButton: false,
+                showCancelButton: true,
+                showDenyButton: true,
+                cancelButtonText: `No`,
+                denyButtonText: `Yes`,
+                icon: 'warning',
+                scrollbarPadding: false,
+            }).then((result) =>
+            {
+                if (result.isDenied) //Denied means released because it's the red button
+                    this.changeToRecipe(recipeId);
+            });
+        }
+        else
+            this.changeToRecipe(recipeId);
     }
 
     async changeToRecipe(recipeId)
@@ -137,6 +214,7 @@ class Recipe extends Component
             currentRecipe: recipeId,
             paused: false,
             waitingForNext: false,
+            savedChanges: true,
         });
     }
 
@@ -266,6 +344,7 @@ class Recipe extends Component
         }));
 
         localStorage.recipes = JSON.stringify(recipes);
+        this.setState({savedChanges: true});
         return true;
     }
 
@@ -1095,7 +1174,7 @@ class Recipe extends Component
             for (let i = 0; i < this.state.recipes.length; ++i)
             {
                 dropdownItems.push(
-                    <Dropdown.Item onClick={this.changeToRecipe.bind(this, i)} key={i}>
+                    <Dropdown.Item onClick={this.tryChangeToRecipe.bind(this, i)} key={i}>
                         {this.state.recipes[i].title}
                     </Dropdown.Item>
                 );
@@ -1121,21 +1200,21 @@ class Recipe extends Component
             <div className="recipe-view">
                 <div className="recipe-list-dropdown">
                     {this.recipeListDropdown()}
-                    <button className="new-recipe-button" onClick={this.wipeRecipe.bind(this)}>New Recipe</button>
+                    <button className="new-recipe-button" onClick={this.tryWipeRecipe.bind(this)}>New Recipe</button>
                 </div>
                 <Form className="recipe-form">
                     <FormControl
                         className="recipe-name-input"
                         placeholder="Add Recipe Name"
                         value={this.state.titleInput}
-                        onChange={(e) => this.setState({titleInput: e.target.value})}
+                        onChange={(e) => this.updateInputField("titleInput", e.target.value)}
                     />
 
                     <TextareaAutosize
                         className="recipe-ingredients-input"
                         placeholder="Add Ingredients"
                         value={this.state.ingredientsInput}
-                        onChange={(e) => this.setState({ingredientsInput: e.target.value})}
+                        onChange={(e) => this.updateInputField("ingredientsInput", e.target.value)}
                         style={{resize: 'none', overflow: 'hidden'}}
                     />
 
@@ -1143,7 +1222,7 @@ class Recipe extends Component
                         className="recipe-instructions-input"
                         placeholder="Add Instructions"
                         value={this.state.instructionsInput}
-                        onChange={(e) => this.setState({instructionsInput: e.target.value})}
+                        onChange={(e) => this.updateInputField("instructionsInput", e.target.value)}
                         style={{resize: 'none', overflow: 'hidden'}}
                     />
                 </Form>
