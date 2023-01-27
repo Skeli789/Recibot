@@ -11,15 +11,24 @@
     border-radius: 10px;
 }
 
-.saved-recipes {
+.saved-recipes
+{
     display: flex;
     width: 100%;
 }
 
-.recipe-list-dropdown {
+.recipe-list-dropdown
+{
     display: flex;
     flex-direction: row;
     width: 100%;
+}
+
+.delete-recipe-button
+{
+    border: 1px solid black;
+    margin-right: 10px;
+    padding: 3px;
 }
 
 .recipe-form

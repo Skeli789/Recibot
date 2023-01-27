@@ -6,6 +6,8 @@ import TextareaAutosize from 'react-textarea-autosize';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 
+import {GrTrash} from "react-icons/gr";
+
 import './stylesheets/Recipe.css';
 
 const sleep = ms => new Promise(
@@ -37,7 +39,7 @@ const RECIPE_STRUCT =
 const IS_TEST_ENVIRONMENT = window['speechSynthesis'] == null;
 
 //UI TODO//
-//TODO: Prevent adding multiple recipes with the same name and set limit for recipe title
+//TODO: Set limit for recipe title
 //TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
 //TODO: When clicking save, the step numbers should automatically be remoevd and readded to the input box also to be in-line with what the bot says
 //TODO: Voice choice
@@ -55,7 +57,7 @@ class Recipe extends Component
         // localStorage.recipes = "[]";
 
         var utterance = null;
-        if(!IS_TEST_ENVIRONMENT)
+        if (!IS_TEST_ENVIRONMENT)
         {
             utterance = new SpeechSynthesisUtterance();
             let voices = window.speechSynthesis.getVoices();
@@ -266,7 +268,7 @@ class Recipe extends Component
         {
             var instructions = this.state.instructionsInput.replace(/(^[ \t]*\n)/gm, "").trim(); //Remove blank lines
             var instructionsList = instructions.toLowerCase().split("\n");
-            var instructionNumberRegex = /^(Step|Part|Instruction)?\s*[0-9]+\s?[.|\-|)]*\s*/; //Matches characters like "1.", "2)", "3-", etc.
+            var instructionNumberRegex = /^(step|part|instruction)?\s*[0-9]+\s?[.|\-|)]*\s*/; //Matches characters like "1.", "2)", "3-", etc.
 
             for (let i = 0; i < instructionsList.length; ++i)
             {
@@ -307,6 +309,19 @@ class Recipe extends Component
         }
     }
 
+    saveRecipesInLocalStorage()
+    {
+        var recipes = this.state.recipes.map(recipe =>
+        ({
+            //Create a new array of recipes with only the title, rawIngredients, and rawInstructions fields
+            title: recipe.title,
+            rawIngredients: recipe.rawIngredients,
+            rawInstructions: recipe.rawInstructions
+        }));
+
+        localStorage.recipes = JSON.stringify(recipes);
+    }
+
     async saveRecipe()
     {
         var recipes;
@@ -335,15 +350,8 @@ class Recipe extends Component
         await this.processInstructions();
 
         //Update the recipe list saved in local storage
-        recipes = this.state.recipes.map(recipe =>
-        ({
-            //Create a new array of recipes with only the title, rawIngredients, and rawInstructions fields
-            title: recipe.title,
-            rawIngredients: recipe.rawIngredients,
-            rawInstructions: recipe.rawInstructions
-        }));
+        this.saveRecipesInLocalStorage();
 
-        localStorage.recipes = JSON.stringify(recipes);
         this.setState({savedChanges: true});
         return true;
     }
@@ -362,6 +370,33 @@ class Recipe extends Component
         }
 
         return recipes;
+    }
+
+    tryDeleteRecipe(i)
+    {
+        PopUp.fire
+        ({
+            title: `Delete the recipe for ${this.state.recipes[i].title}`,
+            showConfirmButton: false,
+            showCancelButton: true,
+            showDenyButton: true,
+            cancelButtonText: `No`,
+            denyButtonText: `Yes`,
+            icon: 'warning',
+            scrollbarPadding: false,
+        }).then((result) =>
+        {
+            if (result.isDenied) //Denied means released because it's the red button
+            {
+                if (this.state.currentRecipe === i)
+                    this.wipeRecipe();
+
+                let recipes = this.state.recipes;
+                recipes.splice(i, 1);
+                this.setState({recipes: recipes});
+                this.saveRecipesInLocalStorage();
+            }
+        });
     }
 
     tryMissingFieldPopUp()
@@ -1173,9 +1208,14 @@ class Recipe extends Component
         {
             for (let i = 0; i < this.state.recipes.length; ++i)
             {
+                let recipeTitle = this.state.recipes[i].title;
                 dropdownItems.push(
                     <Dropdown.Item onClick={this.tryChangeToRecipe.bind(this, i)} key={i}>
-                        {this.state.recipes[i].title}
+                        <GrTrash size={24}
+                            className="delete-recipe-button"
+                            data-testid={`delete-recipe-${recipeTitle}`}
+                            onClick={this.tryDeleteRecipe.bind(this, i)} />
+                        <span>{recipeTitle}</span>
                     </Dropdown.Item>
                 );
             }
@@ -1229,7 +1269,7 @@ class Recipe extends Component
 
                 <div className="recipe-buttons">
                     <button onClick={this.saveRecipe.bind(this)}>Save Recipe</button>
-                    <button onClick={this.startListeningAndReading.bind(this)}>Save & Start Reading</button>
+                    <button onClick={this.startListeningAndReading.bind(this)}>Save & Start Cooking</button>
                 </div>
             </div>
         );

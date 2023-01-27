@@ -183,13 +183,14 @@ beforeEach(() =>
     ingredientsInput = component.getByPlaceholderText("Add Ingredients");
     instructionsInput = component.getByPlaceholderText("Add Instructions");
     saveButton = component.getByText("Save Recipe");
-    startReadingButton = component.getByText("Save & Start Reading");
+    startReadingButton = component.getByText("Save & Start Cooking");
     newRecipeButton = component.getByText("New Recipe");
     recipeListButton = component.getByText("Choose Recipe");
     log = jest.spyOn(console, 'log').mockImplementation(() => {});
 });
 
-test('form can be filled out and reset', async () => {
+test('form can be filled out and reset', async () =>
+{
     var button;
 
     //Saving an empty form should bring up an error pop-up
@@ -230,7 +231,8 @@ test('form can be filled out and reset', async () => {
     expect(instructionsInput.value).toBe("");
 });
 
-test('form can be filled out multiple times and recipes can be switched between', async () => {
+test('form can be filled out multiple times and recipes can be switched between', async () =>
+{
     var button;
 
     //Save recipe 1
@@ -288,7 +290,6 @@ test('form can be filled out multiple times and recipes can be switched between'
     expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_2);
 
     //Find and switch recipe 1 in the recipe dropdown
-    act(() => {fireEvent.click(recipeListButton)});
     await act(async () => {fireEvent.click(recipeListButton)});
     button =  component.getByText(TEST_TITLE_1);
     act(() => {fireEvent.click(button)});
@@ -297,6 +298,52 @@ test('form can be filled out multiple times and recipes can be switched between'
     expect(titleInput.value).toBe(TEST_TITLE_1);
     expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_1);
     expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_1);
+});
+
+test('recipes can be deleted', async () =>
+{
+    var button, deleteButton;
+
+    //Save recipe 1
+    FillRecipe1();
+    await act(async () => {fireEvent.click(saveButton)});
+
+    //Save recipe 2
+    act(() => {fireEvent.click(newRecipeButton)});
+    FillRecipe2();
+    await act(async () => {fireEvent.click(saveButton)});
+
+    //Try Delete Recipe 2
+    await act(async () => {fireEvent.click(recipeListButton)});
+    deleteButton = component.getByTestId(`delete-recipe-${TEST_TITLE_2}`);
+    await act(async () => {fireEvent.click(deleteButton)});
+
+    //Say no to the delete changes confirmation
+    button = component.getByText("No");
+    act(() => {fireEvent.click(button)});
+
+    //Confirm nothing was deleted
+    expect(titleInput.value).toBe(TEST_TITLE_2);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_2);
+    expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_2);
+
+    //Try delete recipe 2 again
+    await act(async () => {fireEvent.click(recipeListButton)});
+    await act(async () => {fireEvent.click(deleteButton)});
+
+    //Say no to the delete changes confirmation
+    button = component.getByText("Yes");
+    act(() => {fireEvent.click(button)});
+
+    //Confirm input was wiped
+    expect(titleInput.value).toBe(TEST_TITLE_2);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_2);
+    expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_2);
+
+    //Confirm recipe 2 is no longer in list
+    await act(async () => {fireEvent.click(recipeListButton)});
+    deleteButton = component.queryByTestId(`delete-recipe-${TEST_TITLE_2}`);
+    expect(deleteButton).not.toBeTruthy();
 });
 
 test('saving prevented with empty title', async () =>
