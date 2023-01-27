@@ -3,12 +3,16 @@ import {Form, FormControl, Dropdown} from 'react-bootstrap';
 import annyang from 'annyang';
 import numerizer from 'numerizer';
 import TextareaAutosize from 'react-textarea-autosize';
+import Swal from 'sweetalert2';
+import withReactContent from 'sweetalert2-react-content';
 
 import './stylesheets/Recipe.css';
 
 const sleep = ms => new Promise(
     resolve => setTimeout(resolve, ms)
 );
+
+const PopUp = withReactContent(Swal);
 
 const READING_INGREDIENTS = 0;
 const READING_INSTRUCTIONS = 1;
@@ -34,10 +38,8 @@ const IS_TEST_ENVIRONMENT = window['speechSynthesis'] == null;
 
 //UI TODO//
 //TODO: Prevent adding multiple recipes with the same name and set limit for recipe title
-//TODO: Add user notice when trying to save a recipe with a title that's already in use
 //TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
 //TODO: Changing recipes when current recipe has been edited should display prompt to save and then if not, wipe changes
-//TODO: Prevent starting reading recipe without a recipe title
 //TODO: When clicking save, the step numbers should automatically be remoevd and readded to the input box also to be in-line with what the bot says
 //TODO: Voice choice
 //TODO: Command list help button
@@ -66,7 +68,7 @@ class Recipe extends Component
             titleInput: "",
             ingredientsInput: "",
             instructionsInput: "",
-            recipes: ("recipes" in localStorage) ? JSON.parse(localStorage.recipes) : [],
+            recipes: this.getInitialRecipes(),
             currentRecipe: -1,
             debugLog: true,
 
@@ -231,23 +233,17 @@ class Recipe extends Component
     {
         var recipes;
 
+        //Try an error pop-up if any field is left blank
+        if (this.tryMissingFieldPopUp())
+            return false;
+
         //Try adding a new recipe if this is brand new
         if (this.state.currentRecipe === -1) //Brand new recipe
         {
-            recipes = this.state.recipes;
-            recipes.push(Object.assign({}, RECIPE_STRUCT));
-            
-            for (let recipe of recipes)
-            {
-                if (recipe.title.toLowerCase() === this.state.titleInput)
-                {
-                    if (this.debugLog())
-                        console.log(`A recipe named "${this.state.titleInput}" already exists! Cancelling saving.`);
-                    //TODO: Add user notice
-                    return;
-                }
-            }
+            if (this.tryDuplicateTitlePopUp())
+                return false;
 
+            recipes = [...this.state.recipes, {...RECIPE_STRUCT}]; //Add a blank recipe struct onto the end of the recipe list
             await this.setStateAndWait
             ({
                 recipes: recipes,
@@ -260,17 +256,70 @@ class Recipe extends Component
         await this.processIngredients();
         await this.processInstructions();
 
-        //Update the recipe list
-        recipes = [];
-        for (let recipe of this.state.recipes)
-        {
-            let savedRecipe = Object.assign({}, RECIPE_STRUCT); //Copy blank object so position in recipe reading is wiped
-            savedRecipe.title = recipe.title;
-            savedRecipe.rawIngredients = recipe.rawIngredients;
-            savedRecipe.rawInstructions = recipe.rawInstructions;
-            recipes.push(savedRecipe);
-        }
+        //Update the recipe list saved in local storage
+        recipes = this.state.recipes.map(recipe =>
+        ({
+            //Create a new array of recipes with only the title, rawIngredients, and rawInstructions fields
+            title: recipe.title,
+            rawIngredients: recipe.rawIngredients,
+            rawInstructions: recipe.rawInstructions
+        }));
+
         localStorage.recipes = JSON.stringify(recipes);
+        return true;
+    }
+
+    getInitialRecipes()
+    {
+        var recipes = [];
+
+        if ("recipes" in localStorage)
+        {
+            recipes = JSON.parse(localStorage.recipes);
+            recipes = recipes.map((recipe) =>
+            {
+                return {...RECIPE_STRUCT, ...recipe} //Fill in missing data from RECIPE_STRUCT
+            });
+        }
+
+        return recipes;
+    }
+
+    tryMissingFieldPopUp()
+    {
+        if (this.state.titleInput === "")
+        {
+            ErrorPopUp("A title is needed for the recipe.");
+            return true;
+        }
+
+        if (this.state.ingredientsInput === "")
+        {
+            ErrorPopUp("Ingredients are needed for the recipe.");
+            return true;
+        }
+
+        if (this.state.instructionsInput === "")
+        {
+            ErrorPopUp("Instructions are needed for the recipe.");
+            return true;
+        }
+
+        return false;
+    }
+
+    tryDuplicateTitlePopUp()
+    {
+        var recipeInput = this.state.titleInput.toLowerCase();
+        var match = this.state.recipes.find(recipe => recipe.title.toLowerCase() === recipeInput); //Find recipe with same title
+
+        if (match)
+        {
+            ErrorPopUp(`A recipe named "${this.state.titleInput}" already exists!`);
+            return true;
+        }
+
+        return false;
     }
 
 
@@ -551,7 +600,9 @@ class Recipe extends Component
 
     async startListeningAndReading()
     {
-        await this.saveRecipe();
+        if (!(await this.saveRecipe()))
+            return;
+
         if (this.tryStartAnnyang())
             this.sayText('Welcome! Please say either "ingredients" or "instructions"');
     }
@@ -1123,6 +1174,19 @@ function ParseStepNumber(step)
         i = parseInt(numerizer(step)) - 1; //Try to convert it from text like "one"
 
     return i;
+}
+
+function ErrorPopUp(errorMsg)
+{
+    PopUp.fire(
+    {
+        icon: 'error',
+        title: errorMsg,
+        cancelButtonText: `Okay`,
+        showConfirmButton: false,
+        showCancelButton: true,
+        //scrollbarPadding: false,
+    });
 }
 
 export default Recipe;

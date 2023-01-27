@@ -208,6 +208,58 @@ test('form can be filled out and reset', () => {
     expect(instructionsInput.value).toBe("");
 });
 
+test('saving prevented with empty title', async () =>
+{
+    await act(async () => {fireEvent.click(saveButton)});
+    let res = component.queryByText("A title is needed for the recipe.")
+    expect(res).toBeTruthy();
+});
+
+test('start reading prevented with empty title', async () =>
+{
+    await act(async () => {fireEvent.click(startReadingButton)});
+    let res = component.queryByText("A title is needed for the recipe.")
+    expect(res).toBeTruthy();
+});
+
+test('saving prevented with empty ingredients', async () =>
+{
+    fireEvent.change(titleInput, {target: {value: TEST_TITLE_1}});
+
+    await act(async () => {fireEvent.click(saveButton)});
+    let res = component.queryByText("Ingredients are needed for the recipe.")
+    expect(res).toBeTruthy();
+});
+
+test('start reading prevented with empty ingredients', async () =>
+{
+    fireEvent.change(titleInput, {target: {value: TEST_TITLE_1}});
+
+    await act(async () => {fireEvent.click(startReadingButton)});
+    let res = component.queryByText("Ingredients are needed for the recipe.")
+    expect(res).toBeTruthy();
+});
+
+test('saving prevented with empty instructions', async () =>
+{
+    fireEvent.change(titleInput, {target: {value: TEST_TITLE_1}});
+    fireEvent.change(ingredientsInput, {target: {value: TEST_INGREDIENTS_1}});
+
+    await act(async () => {fireEvent.click(saveButton)});
+    let res = component.queryByText("Instructions are needed for the recipe.")
+    expect(res).toBeTruthy();
+});
+
+test('start reading prevented with empty instructions', async () =>
+{
+    fireEvent.change(titleInput, {target: {value: TEST_TITLE_1}});
+    fireEvent.change(ingredientsInput, {target: {value: TEST_INGREDIENTS_1}});
+
+    await act(async () => {fireEvent.click(startReadingButton)});
+    let res = component.queryByText("Instructions are needed for the recipe.")
+    expect(res).toBeTruthy();
+});
+
 test('start reading gives initial instructions', async () =>
 {
     FillRecipe1();
@@ -219,20 +271,6 @@ test('start reading gives initial instructions', async () =>
     //Saying repeat last step should do nothing
     await act(async () => {annyang.trigger("repeat last step")});
     expect(log).toHaveBeenLastCalledWith("No instruction has been spoken yet");
-});
-
-test('saying "ingredients" with empty field', async () =>
-{
-    await act(async () => {fireEvent.click(startReadingButton)});
-    await act(async () => {annyang.trigger("ingredients")});
-    expect(log).toHaveBeenLastCalledWith("Enter ingredients first.");
-});
-
-test('saying "continue ingredients" with empty field', async () =>
-{
-    await act(async () => {fireEvent.click(startReadingButton)});
-    await act(async () => {annyang.trigger("continue ingredients")});
-    expect(log).toHaveBeenLastCalledWith("Enter ingredients first.");
 });
 
 test('saying "ingredients" reads all ingredients', async () =>
@@ -404,20 +442,6 @@ test('how much of ingredient', async () =>
     //Ask how much of chip (instead of chips)
     await act(async () => {annyang.trigger("how much chip")});
     expect(log).toHaveBeenLastCalledWith("1 bag of chips");
-});
-
-test('saying "instructions" with empty field', async () =>
-{
-    await act(async () => {fireEvent.click(startReadingButton)});
-    await act(async () => {annyang.trigger("instructions")});
-    expect(log).toHaveBeenLastCalledWith("Enter instructions first.");
-});
-
-test('saying "continue instructions" with empty field', async () =>
-{
-    await act(async () => {fireEvent.click(startReadingButton)});
-    await act(async () => {annyang.trigger("continue instructions")});
-    expect(log).toHaveBeenLastCalledWith("Enter instructions first.");
 });
 
 test('saying "instructions" reads all instructions', async () =>
