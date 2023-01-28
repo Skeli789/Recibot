@@ -39,7 +39,6 @@ const RECIPE_STRUCT =
 const IS_TEST_ENVIRONMENT = window['speechSynthesis'] == null;
 
 //UI TODO//
-//TODO: Set limit for recipe title
 //TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
 //TODO: When clicking save, the step numbers should automatically be remoevd and readded to the input box also to be in-line with what the bot says
 //TODO: Voice choice
@@ -184,9 +183,14 @@ class Recipe extends Component
 
         if (!this.state.savedChanges)
         {
+            var title = (recipeId === this.state.currentRecipe) ?
+                "You have unsaved changed!\nReload this recipe anyway?"
+            :
+                "You have unsaved changed!\nChange recipes anyway?";
+
             PopUp.fire
             ({
-                title: "You have unsaved changed!\nChange recipes anyway?",
+                title: title,
                 showConfirmButton: false,
                 showCancelButton: true,
                 showDenyButton: true,
@@ -330,6 +334,10 @@ class Recipe extends Component
         if (this.tryMissingFieldPopUp())
             return false;
 
+        //Try an error pop-up if the title is too long
+        if (this.tryLongTitleLengthPopUp())
+            return false;
+
         //Try adding a new recipe if this is brand new
         if (this.state.currentRecipe === -1) //Brand new recipe
         {
@@ -420,6 +428,15 @@ class Recipe extends Component
         }
 
         return false;
+    }
+
+    tryLongTitleLengthPopUp()
+    {
+        if (this.state.titleInput.length > 50)
+        {
+            ErrorPopUp("The recipe name is too long!\nReduce it to 50 characters.");
+            return true;
+        }
     }
 
     tryDuplicateTitlePopUp()

@@ -263,7 +263,7 @@ test('form can be filled out multiple times and recipes can be switched between'
     //Make slight change and try switching to recipe 2
     fireEvent.change(titleInput, {target: {value: TEST_TITLE_1 + "a"}});
     await act(async () => {fireEvent.click(recipeListButton)});
-    button =  component.getByText(TEST_TITLE_2);
+    button = component.getByText(TEST_TITLE_2);
     act(() => {fireEvent.click(button)});
 
     //Say no to the delete changes confirmation
@@ -346,18 +346,36 @@ test('recipes can be deleted', async () =>
     expect(deleteButton).not.toBeTruthy();
 });
 
-test('saving prevented with empty title', async () =>
+test('saving prevented with empty title or too long title', async () =>
 {
+    //Try saving empty title
     await act(async () => {fireEvent.click(saveButton)});
-    let res = component.queryByText("A title is needed for the recipe.")
+    let res = component.queryByText("A title is needed for the recipe.");
+    expect(res).toBeTruthy();
+    expect(log).not.toHaveBeenCalledWith(welcomeMessage);
+
+    //Try saving really long title
+    FillRecipe1();
+    fireEvent.change(titleInput, {target: {value: "A".repeat(51)}});
+    await act(async () => {fireEvent.click(saveButton)});
+    res = component.queryByText(/The recipe name is too long!/);
     expect(res).toBeTruthy();
     expect(log).not.toHaveBeenCalledWith(welcomeMessage);
 });
 
 test('start reading prevented with empty title', async () =>
 {
+    //Try saving empty title
     await act(async () => {fireEvent.click(startReadingButton)});
-    let res = component.queryByText("A title is needed for the recipe.")
+    let res = component.queryByText("A title is needed for the recipe.");
+    expect(res).toBeTruthy();
+    expect(log).not.toHaveBeenCalledWith(welcomeMessage);
+
+    //Try saving really long title
+    FillRecipe1();
+    fireEvent.change(titleInput, {target: {value: "A".repeat(51)}});
+    await act(async () => {fireEvent.click(saveButton)});
+    res = component.queryByText(/The recipe name is too long!/);
     expect(res).toBeTruthy();
     expect(log).not.toHaveBeenCalledWith(welcomeMessage);
 });
@@ -367,7 +385,7 @@ test('saving prevented with empty ingredients', async () =>
     fireEvent.change(titleInput, {target: {value: TEST_TITLE_1}});
 
     await act(async () => {fireEvent.click(saveButton)});
-    let res = component.queryByText("Ingredients are needed for the recipe.")
+    let res = component.queryByText("Ingredients are needed for the recipe.");
     expect(res).toBeTruthy();
     expect(log).not.toHaveBeenCalledWith(welcomeMessage);
 });
@@ -377,7 +395,7 @@ test('start reading prevented with empty ingredients', async () =>
     fireEvent.change(titleInput, {target: {value: TEST_TITLE_1}});
 
     await act(async () => {fireEvent.click(startReadingButton)});
-    let res = component.queryByText("Ingredients are needed for the recipe.")
+    let res = component.queryByText("Ingredients are needed for the recipe.");
     expect(res).toBeTruthy();
     expect(log).not.toHaveBeenCalledWith(welcomeMessage);
 });
@@ -388,7 +406,7 @@ test('saving prevented with empty instructions', async () =>
     fireEvent.change(ingredientsInput, {target: {value: TEST_INGREDIENTS_1}});
 
     await act(async () => {fireEvent.click(saveButton)});
-    let res = component.queryByText("Instructions are needed for the recipe.")
+    let res = component.queryByText("Instructions are needed for the recipe.");
     expect(res).toBeTruthy();
     expect(log).not.toHaveBeenCalledWith(welcomeMessage);
 });
@@ -399,7 +417,7 @@ test('start reading prevented with empty instructions', async () =>
     fireEvent.change(ingredientsInput, {target: {value: TEST_INGREDIENTS_1}});
 
     await act(async () => {fireEvent.click(startReadingButton)});
-    let res = component.queryByText("Instructions are needed for the recipe.")
+    let res = component.queryByText("Instructions are needed for the recipe.");
     expect(res).toBeTruthy();
     expect(log).not.toHaveBeenCalledWith(welcomeMessage);
 });
