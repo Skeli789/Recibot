@@ -630,6 +630,8 @@ class Recipe extends Component
         {
             if (this.debugLog())
                 console.log("Toggled reading slower");
+
+            this.sayText(`Lines will now be read one at a time. To hear the next line, say "next" or "continue".`);
         }   
         else
         {
@@ -638,6 +640,8 @@ class Recipe extends Component
     
             if (this.state.waitingForNext)
                 this.processSayingNext(); //If waiting for next, toggling faster will start it automatically
+            else
+                this.sayText("Lines will now be read all at once.");
         }
 
         this.setState({stepByStep: toggle});

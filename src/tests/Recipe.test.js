@@ -463,13 +463,13 @@ test('saying "slowly" and then "ingredients" reads all ingredients one at a time
 
     //Click the start button, toggle slow mode, and start reading ingredients
     await act(async () => {fireEvent.click(startReadingButton)});
-    await act(async () =>
-    {
-        annyang.trigger("slowly");
-        annyang.trigger("ingredients");
-    });
 
-    //Check to make the first ingredient was read
+    //Toggle slow mode
+    await act(async () =>{annyang.trigger("slowly")});
+    expect(log).toHaveBeenLastCalledWith(`Lines will now be read one at a time. To hear the next line, say "next" or "continue".`);
+
+    //Start reading the ingredients and check to make sure the first ingredient was read
+    await act(async () =>{annyang.trigger("ingredients")});
     let ingredientsList = TEST_INGREDIENTS_CONVERTED_1.split("\n");
     expect(log).toHaveBeenLastCalledWith(ingredientsList[0]);
 
@@ -967,8 +967,11 @@ test('which step am I on', async () =>
     await act(async () => {annyang.trigger("current step")});
     expect(log).toHaveBeenLastCalledWith(`Currently reading step 1 of ${TEST_TITLE_1}.`); //Should still be step 1 because step 2 has not been started yet
 
-    //Finish the instructions
+    //Toggle fast mode
     await act(async () => {annyang.trigger("faster")});
+    expect(log).toHaveBeenLastCalledWith("Lines will now be read all at once.");
+
+    //Finish the instructions
     await act(async () => {annyang.trigger("next")});
     await act(async () => {annyang.trigger("current step")});
     expect(log).toHaveBeenLastCalledWith(`The instructions for ${TEST_TITLE_1} are finished.`);
