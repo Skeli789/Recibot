@@ -8,6 +8,8 @@ import withReactContent from 'sweetalert2-react-content';
 
 import {GrTrash} from "react-icons/gr";
 
+import VoiceNames from "./data/Voices"
+
 import './stylesheets/Recipe.css';
 
 const sleep = ms => new Promise(
@@ -40,8 +42,8 @@ const IS_TEST_ENVIRONMENT = window['speechSynthesis'] == null;
 
 //UI TODO//
 //TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
-//TODO: Voice choice
 //TODO: Command list help button
+//TODO: Saving ingredients should stick a "-" in front of each of them in the input field (like how numbers are stuck in front of each instruction)
 
 //Backend TODO//
 //TODO: Timer functionality ("set a timer for X", "(how much) time (is left) on the timer", "stop timer"). Should be able to set multiple and give each a name (and ofc recipe title should be factored in).
@@ -55,11 +57,13 @@ class Recipe extends Component
         // localStorage.recipes = "[]";
 
         var utterance = null;
+        var voiceId = "voiceId" in localStorage ? parseInt(localStorage.voiceId) : 1; //Start with the nice male voice
+
         if (!IS_TEST_ENVIRONMENT)
         {
             utterance = new SpeechSynthesisUtterance();
             let voices = window.speechSynthesis.getVoices();
-            utterance.voice = voices[1]; //Nicer male voice
+            utterance.voice = voices[voiceId]; //Nicer male voice
         }
 
         this.state =
@@ -78,6 +82,7 @@ class Recipe extends Component
             paused: false,
             waitingForNext: false,
             stepByStep: false,
+            voiceId: voiceId,
             speakingId: 0,
         };
     }
@@ -154,7 +159,7 @@ class Recipe extends Component
                 scrollbarPadding: false,
             }).then((result) =>
             {
-                if (result.isDenied) //Denied means released because it's the red button
+                if (result.isDenied) //Denied means yes because it's the red button
                     this.wipeRecipe();
             });
         }
@@ -199,7 +204,7 @@ class Recipe extends Component
                 scrollbarPadding: false,
             }).then((result) =>
             {
-                if (result.isDenied) //Denied means released because it's the red button
+                if (result.isDenied) //Denied means yes because it's the red button
                     this.changeToRecipe(recipeId);
             });
         }
@@ -337,6 +342,8 @@ class Recipe extends Component
         }));
 
         localStorage.recipes = JSON.stringify(recipes);
+        if (recipes.length > 0)
+            localStorage.backupRecipes = localStorage.recipes; //In case I accidentally delete the other cookie
     }
 
     async saveRecipe()
@@ -407,7 +414,7 @@ class Recipe extends Component
             scrollbarPadding: false,
         }).then((result) =>
         {
-            if (result.isDenied) //Denied means released because it's the red button
+            if (result.isDenied) //Denied means yes because it's the red button
             {
                 if (this.state.currentRecipe === i)
                     this.wipeRecipe();
@@ -500,7 +507,7 @@ class Recipe extends Component
                     "resume":  this.resumeTalking.bind(this),
                     "stop":    this.stopTalking.bind(this),
                     "shop":    this.stopTalking.bind(this), //Commonly heard instead of "stop"
-                    "disable": this.disableAnnyang.bind(this),
+                    "disable(d)": this.disableAnnyang.bind(this),
                     "repeat":  this.repeatLastSpoken.bind(this),
 
                     //Ingredients Commands
@@ -548,6 +555,7 @@ class Recipe extends Component
             return true;
         }
 
+        ErrorPopUp("Recibot is not supported in this browser!\nTry another like Google Chrome.");
         console.log("Annyang is not available");
         return false;
     }
@@ -561,6 +569,15 @@ class Recipe extends Component
 
 
     //Speech Synthesis Util//
+
+    changeVoice(voiceId)
+    {
+        let utterance = this.state.utterance;
+        let voices = window.speechSynthesis.getVoices();
+        utterance.voice = voices[voiceId];
+        this.setState({voiceId: voiceId, utterance: utterance});
+        localStorage.voiceId = voiceId;
+    }
 
     async generateSpeakingId()
     {
@@ -586,8 +603,8 @@ class Recipe extends Component
         if (!IS_TEST_ENVIRONMENT) //No speech synthesis in a test envrionment
         {
             let voices = window.speechSynthesis.getVoices();
+            utterance.voice = voices[this.state.voiceId];
             utterance.text = text;
-            utterance.voice = voices[1]; //Nicer male voice
         }
 
         this.setState
@@ -1250,9 +1267,54 @@ class Recipe extends Component
 
     //GUI Util//
 
+    navBar()
+    {
+        return (
+            <div className="nav-bar">
+                {this.voiceListDropdown()}
+            </div>
+        );
+    }
+
+    voiceListDropdown()
+    {
+        var dropdownItems = [];
+        var voices = window.speechSynthesis.getVoices();
+        var voiceMap = {}
+
+        for (let i = 0; i < voices.length; ++i)
+            voiceMap[voices[i].voiceURI] = i;
+
+        for (let voice of Object.keys(VoiceNames))
+        {
+            if (voice in voiceMap)
+            {
+                let voiceId = voiceMap[voice];
+
+                dropdownItems.push(
+                    <Dropdown.Item onClick={this.changeVoice.bind(this, voiceId)} key={voiceId}>
+                        {VoiceNames[voice]}
+                    </Dropdown.Item>
+                )
+            }
+        }
+
+        return (
+            <Dropdown className="voice-list">
+                <Dropdown.Toggle variant="success" id="dropdown-basic" className="voice-list-button">
+                    {VoiceNames[voices[this.state.voiceId].voiceURI]}
+                </Dropdown.Toggle>
+
+                <Dropdown.Menu>
+                    {dropdownItems}
+                </Dropdown.Menu>
+            </Dropdown>
+        );
+    }
+
     recipeListDropdown()
     {
-        let dropdownItems = [];
+        var dropdownItems = [];
 
         if (this.state.recipes.length === 0) //No saved recipes yet
             dropdownItems = [<Dropdown.Item key={0}>No saved recipes!</Dropdown.Item>];
@@ -1289,39 +1351,42 @@ class Recipe extends Component
     render()
     {
         return (
-            <div className="recipe-view">
-                <div className="recipe-list-dropdown">
-                    {this.recipeListDropdown()}
-                    <button className="new-recipe-button" onClick={this.tryWipeRecipe.bind(this)}>New Recipe</button>
-                </div>
-                <Form className="recipe-form">
-                    <FormControl
-                        className="recipe-name-input"
-                        placeholder="Add Recipe Name"
-                        value={this.state.titleInput}
-                        onChange={(e) => this.updateInputField("titleInput", e.target.value)}
-                    />
+            <div className="recipe-page">
+                {this.navBar()}
+                <div className="recipe-view">
+                    <div className="recipe-list-dropdown">
+                        {this.recipeListDropdown()}
+                        <button className="new-recipe-button" onClick={this.tryWipeRecipe.bind(this)}>New Recipe</button>
+                    </div>
+                    <Form className="recipe-form">
+                        <FormControl
+                            className="recipe-name-input"
+                            placeholder="Add Recipe Name"
+                            value={this.state.titleInput}
+                            onChange={(e) => this.updateInputField("titleInput", e.target.value)}
+                        />
 
-                    <TextareaAutosize
-                        className="recipe-ingredients-input"
-                        placeholder="Add Ingredients"
-                        value={this.state.ingredientsInput}
-                        onChange={(e) => this.updateInputField("ingredientsInput", e.target.value)}
-                        style={{resize: 'none', overflow: 'hidden'}}
-                    />
+                        <TextareaAutosize
+                            className="recipe-ingredients-input"
+                            placeholder="Add Ingredients"
+                            value={this.state.ingredientsInput}
+                            onChange={(e) => this.updateInputField("ingredientsInput", e.target.value)}
+                            style={{resize: 'none', overflow: 'hidden'}}
+                        />
 
-                    <TextareaAutosize
-                        className="recipe-instructions-input"
-                        placeholder="Add Instructions"
-                        value={this.state.instructionsInput}
-                        onChange={(e) => this.updateInputField("instructionsInput", e.target.value)}
-                        style={{resize: 'none', overflow: 'hidden'}}
-                    />
-                </Form>
+                        <TextareaAutosize
+                            className="recipe-instructions-input"
+                            placeholder="Add Instructions"
+                            value={this.state.instructionsInput}
+                            onChange={(e) => this.updateInputField("instructionsInput", e.target.value)}
+                            style={{resize: 'none', overflow: 'hidden'}}
+                        />
+                    </Form>
 
-                <div className="recipe-buttons">
-                    <button onClick={this.saveRecipe.bind(this)}>Save Recipe</button>
-                    <button onClick={this.startListeningAndReading.bind(this)}>Save & Start Cooking</button>
+                    <div className="recipe-buttons">
+                        <button onClick={this.saveRecipe.bind(this)}>Save Recipe</button>
+                        <button onClick={this.startListeningAndReading.bind(this)}>Save & Start Cooking</button>
+                    </div>
                 </div>
             </div>
         );

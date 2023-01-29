@@ -1,3 +1,26 @@
+.recipe-page
+{
+    width: 100%;
+}
+
+.nav-bar
+{
+    display: flex;
+    flex-direction: row;
+    height: 50px;
+    background-color: #45a049;
+}
+
+.voice-list
+{
+    margin-left: 1%;
+}
+
+.voice-list-button
+{
+    width: fit-content;
+}
+
 .recipe-view
 {
     display: flex;
