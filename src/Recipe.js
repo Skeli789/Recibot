@@ -829,13 +829,31 @@ class Recipe extends Component
 
     howMuchIngredient(ingredient)
     {
+        var matchIndex = 0; //The user can specify which match if there are multiple matches using []
         ingredient = ingredient.toLowerCase();
+
+        let specificNum = ingredient.match(/\[(.*?)\]/g);
+        if (specificNum)
+        {
+            try
+            {
+                ingredient = ingredient.replace(/\[(.*?)\]/g, "").trim();
+                matchIndex = parseInt(specificNum[0].replace(/\[*\]*/g, "")) - 1; //1-indexed
+            }
+            catch (e)
+            {
+                console.log(`Error replacing match index in "${ingredient}": ${e}`);
+            }
+        }
+
         var matches = this.getCurrentRecipe().ingredientsList.filter(item => item.includes(ingredient));
 
         if (matches.length === 1)
             return matches[0];
+        else if (matchIndex < matches.length)
+            return matches[matchIndex]; //Match the request index in this list
         else
-            return ingredient; //Either 0 or multiple matches, and if multiple better not to make a mistake
+            return ingredient; //Just match the first ingredient
     }
 
     repeatSpecificIngredient(ingredient)

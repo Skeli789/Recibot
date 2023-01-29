@@ -97,12 +97,12 @@ export const TEST_INGREDIENTS_CONVERTED_3 =
 ingredient 2`;
 
 export const TEST_INSTRUCTIONS_3 =
-`1. Dummy step 1 part 1. Dummy step 1 part 2.
-2. Dummy step 2.
+`1. Dummy step 1 part 1 <ingredient> <ingredient [2]>. Dummy step 1 part 2.
+2. Dummy step 2 <ingredient [5]> <ingredient [non-int]>.
 3. Dummy step 3.`;
 
 export const TEST_INSTRUCTIONS_3_CONVERTED =
-`Step 1. dummy step 1 part 1
+`Step 1. dummy step 1 part 1 ingredient 1 ingredient 2
 dummy step 1 part 2
-Step 2. dummy step 2
+Step 2. dummy step 2 ingredient ingredient
 Step 3. dummy step 3`;
