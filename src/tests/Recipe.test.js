@@ -4,8 +4,9 @@ import annyang from 'annyang';
 
 import Recipe from '../Recipe';
 import {TEST_TITLE_1, TEST_TITLE_2, TEST_TITLE_3,
-        TEST_INGREDIENTS_1, TEST_INGREDIENTS_CONVERTED_1, TEST_INGREDIENTS_2, TEST_INGREDIENTS_CONVERTED_2, TEST_INGREDIENTS_3, TEST_INGREDIENTS_CONVERTED_3,
-        TEST_INSTRUCTIONS_1, TEST_INSTRUCTIONS_CONVERTED_1, TEST_INSTRUCTIONS_2, TEST_INSTRUCTIONS_CONVERTED_2, TEST_INSTRUCTIONS_3, TEST_INSTRUCTIONS_3_CONVERTED} from './TestRecipes';
+        TEST_INGREDIENTS_1, TEST_INGREDIENTS_CONVERTED_1, TEST_INSTRUCTIONS_1, TEST_INSTRUCTIONS_CONVERTED_1, 
+        TEST_INGREDIENTS_2, TEST_INGREDIENTS_CONVERTED_2, TEST_INSTRUCTIONS_2, TEST_INSTRUCTIONS_CONVERTED_2, 
+        TEST_INGREDIENTS_3, TEST_INGREDIENTS_CONVERTED_3, TEST_INSTRUCTIONS_3, TEST_INSTRUCTIONS_3_NO_NUMS, TEST_INSTRUCTIONS_3_CONVERTED} from './TestRecipes';
 
 
 //Mock Annyang Libray//
@@ -298,6 +299,18 @@ test('form can be filled out multiple times and recipes can be switched between'
     expect(titleInput.value).toBe(TEST_TITLE_1);
     expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_1);
     expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_1);
+});
+
+test('filling out instructions auto-assigns numbers', async () =>
+{
+    //First fill out the instructions with no numbers
+    FillRecipe3();
+    fireEvent.change(instructionsInput, {target: {value: TEST_INSTRUCTIONS_3_NO_NUMS}});
+    expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_3_NO_NUMS);
+
+    //Then save and make sure the numbers were added
+    await act(async () => {fireEvent.click(saveButton)});
+    expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_3);
 });
 
 test('recipes can be deleted', async () =>

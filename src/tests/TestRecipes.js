@@ -101,6 +101,11 @@ export const TEST_INSTRUCTIONS_3 =
 2. Dummy step 2 <ingredient [5]> <ingredient [non-int]>.
 3. Dummy step 3.`;
 
+export const TEST_INSTRUCTIONS_3_NO_NUMS =
+`Dummy step 1 part 1 <ingredient> <ingredient [2]>. Dummy step 1 part 2.
+Step 5: Dummy step 2 <ingredient [5]> <ingredient [non-int]>.
+Part 7 - Dummy step 3.`;
+
 export const TEST_INSTRUCTIONS_3_CONVERTED =
 `Step 1. dummy step 1 part 1 ingredient 1 ingredient 2
 dummy step 1 part 2

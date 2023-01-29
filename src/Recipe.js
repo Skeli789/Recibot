@@ -40,7 +40,6 @@ const IS_TEST_ENVIRONMENT = window['speechSynthesis'] == null;
 
 //UI TODO//
 //TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
-//TODO: When clicking save, the step numbers should automatically be remoevd and readded to the input box also to be in-line with what the bot says
 //TODO: Voice choice
 //TODO: Command list help button
 
@@ -271,16 +270,24 @@ class Recipe extends Component
         if (this.state.instructionsInput.length > 0)
         {
             var instructions = this.state.instructionsInput.replace(/(^[ \t]*\n)/gm, "").trim(); //Remove blank lines
-            var instructionsList = instructions.toLowerCase().split("\n");
-            var instructionNumberRegex = /^(step|part|instruction)?\s*[0-9]+\s?[.|\-|)]*\s*/; //Matches characters like "1.", "2)", "3-", etc.
+            var instructionsList = instructions.split("\n");
+            var instructionNumberRegex = /^((S|s)tep|(P|p)art|(I|i)nstruction)?\s*[0-9]+\s?[.|\-|:|)]*\s*/; //Matches characters like "1.", "2)", "3-", etc.
+            var newInstructionsInput = ""
 
             for (let i = 0; i < instructionsList.length; ++i)
             {
-                let instruction = instructionsList[i];
+                let originalInstruction = instructionsList[i];
+                let instruction = originalInstruction.toLowerCase();
 
                 //Remove the leading number from the instruction if present
                 if (instruction.match(instructionNumberRegex))
+                {
                     instruction = instruction.replace(instructionNumberRegex, "");
+                    originalInstruction = originalInstruction.replace(instructionNumberRegex, ""); //Modify the input as well so the numbers match what the bot says
+                }
+
+                //Add leading step number to the original input
+                newInstructionsInput += `${i + 1}. ` + originalInstruction + "\n";
 
                 //Add | to indicate pauses after adding specific ingredients
                 let multiIngredientRegex = /<.+>,?.*\sand\s<.+>/g;
@@ -309,7 +316,13 @@ class Recipe extends Component
                 instructionsList[i] = subInstructionList;
             }
 
-            await this.updateCurrentRecipeAndWait({instructionsList: instructionsList, rawInstructions: this.state.instructionsInput.trim()});
+            newInstructionsInput = newInstructionsInput.trim();
+            this.setState({instructionsInput: newInstructionsInput});
+            await this.updateCurrentRecipeAndWait
+            ({
+                instructionsList: instructionsList,
+                rawInstructions: newInstructionsInput,
+            });
         }
     }
 
