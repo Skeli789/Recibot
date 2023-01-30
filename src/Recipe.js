@@ -39,14 +39,16 @@ const RECIPE_STRUCT =
     repeatingSpecificStep: -1,
 };
 const IS_TEST_ENVIRONMENT = window['speechSynthesis'] == null;
+const BLANK_LINE_REGEX = /(^[ \t]*\n)/gm;
+const SECTION_REGEX = /{.*}/g;;
 
 //UI TODO//
 //TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
 //TODO: Command list help button
-//TODO: Saving ingredients should stick a "-" in front of each of them in the input field (like how numbers are stuck in front of each instruction)
 
 //Backend TODO//
 //TODO: Timer functionality ("set a timer for X", "(how much) time (is left) on the timer", "stop timer"). Should be able to set multiple and give each a name (and ofc recipe title should be factored in).
+//TODO: Should be able to add together common ingredients across multiple recipes for a "total amount needed request"
 
 
 class Recipe extends Component
@@ -262,11 +264,47 @@ class Recipe extends Component
     {
         if (this.state.ingredientsInput.length > 0)
         {
-            var ingredients = this.state.ingredientsInput
-                                .replace(/^\s*-*•*\s*/gm, '') //Remove leading dashes and dots
-                                .replace(/(^[ \t]*\n)/gm, "").trim(); //Remove blank lines
+            const leadingDashRegex = /^\s*-*•*\s*/gm;
+            var originalInput = this.state.ingredientsInput;
+
+            //Process the original input
+            var newInput = "";
+            for (let line of this.state.ingredientsInput.split("\n"))
+            {
+                line = line.replace(leadingDashRegex, "").trim();
+                if (line.length > 0)
+                    newInput += (line.endsWith(":") ? line + "\n" : "• " + line + "\n"); //Ingredient section is left alone
+                else
+                    newInput += "\n";
+            }
+            newInput = newInput.trim();
+            await this.setStateAndWait({ingredientsInput: newInput});
+
+            //Process what the bot hears
+            var ingredients = originalInput
+                                .replace(leadingDashRegex, "") //Remove leading dashes and dots
+                                .replace(BLANK_LINE_REGEX, "").trim(); //Remove blank lines
             var ingredientsList = ingredients.toLowerCase().split("\n");
-            await this.updateCurrentRecipeAndWait({ingredientsList: ingredientsList, rawIngredients: this.state.ingredientsInput.trim()});
+
+            if (ingredientsList.filter(item => item.endsWith(":")).length >= 2) //Multiple sections of ingredients
+            {
+                let section = "";
+
+                for (let i = 0; i < ingredientsList.length; ++i)
+                {
+                    let ingredient = ingredientsList[i];
+                    if (ingredient.endsWith(":"))
+                        section = ingredient.slice(0, -1); //Remove the trailing colon
+                    else if (section.length > 0)
+                        ingredientsList[i] = "{" + section + "}" + ingredient;
+                }
+            }
+
+            await this.updateCurrentRecipeAndWait
+            ({
+                ingredientsList: ingredientsList,
+                rawIngredients: newInput
+            });
         }
     }
 
@@ -274,7 +312,7 @@ class Recipe extends Component
     {
         if (this.state.instructionsInput.length > 0)
         {
-            var instructions = this.state.instructionsInput.replace(/(^[ \t]*\n)/gm, "").trim(); //Remove blank lines
+            var instructions = this.state.instructionsInput.replace(BLANK_LINE_REGEX, "").trim(); //Remove blank lines
             var instructionsList = instructions.split("\n");
             var instructionNumberRegex = /^((S|s)tep|(P|p)art|(I|i)nstruction)?\s*[0-9]+\s?[.|\-|:|)]*\s*/; //Matches characters like "1.", "2)", "3-", etc.
             var newInstructionsInput = ""
@@ -823,9 +861,15 @@ class Recipe extends Component
 
         for (i = this.getCurrentRecipe().currentlyReadingIngredientLine; i < ingredientsList.length; ++i)
         {
-            textToSay = ingredientsList[i];
+            let section = false;
+            textToSay = ingredientsList[i].replace(SECTION_REGEX, "");
+            if (textToSay.endsWith(":"))
+            {
+                textToSay = `for ${textToSay}`;
+                section = true;
+            }
 
-            if (i + 1 >= ingredientsList.length) //Last ingredient
+            if (!section && i + 1 >= ingredientsList.length) //Last ingredient
             {
                 if (ingredientsList.length >= 3) //At least three ingredients
                     textToSay = "And finally, " + textToSay;
@@ -837,7 +881,7 @@ class Recipe extends Component
                 return; //Stopped in the middle of speaking
 
             await this.updateCurrentRecipeAndWait({currentlyReadingIngredientLine: i + 1}); //Here and not at the start of the loop because if the next is cancelled, it should still start from the next step
-            if (this.shouldWaitForNext())
+            if (!section && this.shouldWaitForNext()) //Don't wait for a "next" after saying a section name
                 return; //Exit the function until the user says next
         }
 
@@ -876,7 +920,7 @@ class Recipe extends Component
             }
         }
 
-        var matches = this.getCurrentRecipe().ingredientsList.filter(item => item.includes(ingredient));
+        var matches = this.getCurrentRecipe().ingredientsList.filter(item => item.includes(ingredient) && !item.endsWith(":"));
 
         if (matches.length === 1)
             return matches[0];
@@ -889,21 +933,23 @@ class Recipe extends Component
     repeatSpecificIngredient(ingredient)
     {
         var matches, ingredientWords;
+        const ingredientsList = this.getCurrentRecipe().ingredientsList;
         ingredient = ingredient.toLowerCase();
         ingredientWords = ingredient.split(" ");
 
         if (ingredientWords.length >= 2) //Do a straight text match for multiple words
         {
-            matches = this.getCurrentRecipe().ingredientsList
-                        .filter(item => item.includes(ingredient)
-                                    || (ingredient.endsWith("s") && item.includes(ingredient.slice(0, -1)))); //Allows matching "oils" to "1 tbsp oil"
+            matches = ingredientsList
+                        .filter(item => !item.endsWith(":") && (item.includes(ingredient) //Exclude section lines
+                                    || (ingredient.endsWith("s") && item.includes(ingredient.slice(0, -1))))); //Allows matching "oils" to "1 tbsp oil"
         }
         else
         {
-            matches = this.getCurrentRecipe().ingredientsList
-                        .filter(item => item.split(" ").indexOf(ingredient) !== -1
-                                    || item.split(" ").indexOf(ingredient + "s") !== -1 //Allows matching "chip" to "1 bag of chips"
-                                    || (ingredient.endsWith("s") && item.split(" ").indexOf((ingredient.slice(0, -1))) !== -1)); //Allows matching "oils" to "1 tbsp oil"
+            matches = ingredientsList
+                        .filter(item => !item.endsWith(":")
+                                   && (item.replace(SECTION_REGEX, "").split(" ").indexOf(ingredient) !== -1
+                                    || item.replace(SECTION_REGEX, "").split(" ").indexOf(ingredient + "s") !== -1 //Allows matching "chip" to "1 bag of chips"
+                                    || (ingredient.endsWith("s") && item.replace(SECTION_REGEX, "").split(" ").indexOf((ingredient.slice(0, -1))) !== -1))); //Allows matching "oils" to "1 tbsp oil"
         }
 
         if (matches.length === 0)
@@ -913,7 +959,22 @@ class Recipe extends Component
         else
         {
             let textToSay = `There are multiple ingredients with "${ingredient}". `;
-            textToSay += matches.slice(0, -1).join(', ') +  ', and ' + matches.slice(-1); //Concatenate all together nicely with the last element having an "and" before it
+
+            textToSay += matches.map((match, index) =>
+            {
+                let section = match.match(SECTION_REGEX);
+
+                if (section)
+                {
+                    //State the section along with ingredient
+                    section = section[0].slice(1, -1);
+                    match = match.replace(SECTION_REGEX, "");
+                    match = `for ${section}, ${match}`;
+                }
+
+                return index + 1 >= matches.length ? `and ${match}` : `${match}${section ? '. ' : ', '}`; //Use sentences for more wordy answers
+            }).join("");
+
             this.sayText(textToSay);
         }
     }
@@ -1279,7 +1340,7 @@ class Recipe extends Component
     voiceListDropdown()
     {
         var dropdownItems = [];
-        var voices = window.speechSynthesis.getVoices();
+        var voices = (!IS_TEST_ENVIRONMENT) ? window.speechSynthesis.getVoices() : [];
         var voiceMap = {}
 
         for (let i = 0; i < voices.length; ++i)
@@ -1302,7 +1363,12 @@ class Recipe extends Component
         return (
             <Dropdown className="voice-list">
                 <Dropdown.Toggle variant="success" id="dropdown-basic" className="voice-list-button">
-                    {VoiceNames[voices[this.state.voiceId].voiceURI]}
+                    {
+                        Object.keys(voices).length === 0 ?
+                            <>No Voices</>
+                        :
+                            VoiceNames[voices[this.state.voiceId].voiceURI]
+                    }
                 </Dropdown.Toggle>
 
                 <Dropdown.Menu>

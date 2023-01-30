@@ -4,9 +4,10 @@ import annyang from 'annyang';
 
 import Recipe from '../Recipe';
 import {TEST_TITLE_1, TEST_TITLE_2, TEST_TITLE_3,
-        TEST_INGREDIENTS_1, TEST_INGREDIENTS_CONVERTED_1, TEST_INSTRUCTIONS_1, TEST_INSTRUCTIONS_CONVERTED_1, 
-        TEST_INGREDIENTS_2, TEST_INGREDIENTS_CONVERTED_2, TEST_INSTRUCTIONS_2, TEST_INSTRUCTIONS_CONVERTED_2, 
-        TEST_INGREDIENTS_3, TEST_INGREDIENTS_CONVERTED_3, TEST_INSTRUCTIONS_3, TEST_INSTRUCTIONS_3_NO_NUMS, TEST_INSTRUCTIONS_3_CONVERTED} from './TestRecipes';
+        TEST_INGREDIENTS_1, TEST_INGREDIENTS_INPUT_CONVERTED_1, TEST_INGREDIENTS_CONVERTED_1, TEST_INSTRUCTIONS_1, TEST_INSTRUCTIONS_CONVERTED_1, 
+        TEST_INGREDIENTS_2, TEST_INGREDIENTS_INPUT_CONVERTED_2, TEST_INSTRUCTIONS_2, TEST_INSTRUCTIONS_CONVERTED_2, 
+        TEST_INGREDIENTS_3, TEST_INGREDIENTS_CONVERTED_3, TEST_INSTRUCTIONS_3, TEST_INSTRUCTIONS_3_NO_NUMS, TEST_INSTRUCTIONS_3_CONVERTED,
+        TEST_TITLE_4, TEST_INGREDIENTS_4, TEST_INGREDIENTS_INPUT_CONVERTED_4, TEST_INGREDIENTS_CONVERTED_4, TEST_INSTRUCTIONS_4} from './TestRecipes';
 
 
 //Mock Annyang Libray//
@@ -154,10 +155,19 @@ function FillRecipe3()
     });
 }
 
-
-function ExpectAllIngredientsRead()
+function FillRecipe4()
 {
-    let ingredientsList = TEST_INGREDIENTS_CONVERTED_1.split("\n");
+    act(() =>
+    {
+        fireEvent.change(titleInput, {target: {value: TEST_TITLE_4}});
+        fireEvent.change(ingredientsInput, {target: {value: TEST_INGREDIENTS_4}});
+        fireEvent.change(instructionsInput, {target: {value: TEST_INSTRUCTIONS_4}});
+    });
+}
+
+function ExpectAllIngredientsRead(convertedIngredients)
+{
+    let ingredientsList = convertedIngredients.split("\n");
 
     for (let i = 0; i < ingredientsList.length; ++i)
     {
@@ -247,7 +257,7 @@ test('form can be filled out multiple times and recipes can be switched between'
 
     //Confirm the inputs were filled out
     expect(titleInput.value).toBe(TEST_TITLE_2);
-    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_2);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_INPUT_CONVERTED_2);
     expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_2);
 
     //Find and switch to recipe 1 in the recipe dropdown
@@ -258,7 +268,7 @@ test('form can be filled out multiple times and recipes can be switched between'
 
     //Confirm the inputs changed back
     expect(titleInput.value).toBe(TEST_TITLE_1);
-    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_1);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_INPUT_CONVERTED_1);
     expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_1);
 
     //Make slight change and try switching to recipe 2
@@ -273,7 +283,7 @@ test('form can be filled out multiple times and recipes can be switched between'
 
     //Confirm the inputs didn't change
     expect(titleInput.value).toBe(TEST_TITLE_1 + "a");
-    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_1);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_INPUT_CONVERTED_1);
     expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_1);
 
     //Try switching to recipe 2 again
@@ -287,7 +297,7 @@ test('form can be filled out multiple times and recipes can be switched between'
 
     //Confirm the inputs changed
     expect(titleInput.value).toBe(TEST_TITLE_2);
-    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_2);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_INPUT_CONVERTED_2);
     expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_2);
 
     //Find and switch recipe 1 in the recipe dropdown
@@ -297,7 +307,7 @@ test('form can be filled out multiple times and recipes can be switched between'
 
     //Confirm the inputs changed back
     expect(titleInput.value).toBe(TEST_TITLE_1);
-    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_1);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_INPUT_CONVERTED_1);
     expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_1);
 });
 
@@ -337,7 +347,7 @@ test('recipes can be deleted', async () =>
 
     //Confirm nothing was deleted
     expect(titleInput.value).toBe(TEST_TITLE_2);
-    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_2);
+    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_INPUT_CONVERTED_2);
     expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_2);
 
     //Try delete recipe 2 again
@@ -346,12 +356,12 @@ test('recipes can be deleted', async () =>
 
     //Say no to the delete changes confirmation
     button = component.getByText("Yes");
-    act(() => {fireEvent.click(button)});
+    await act(async () => {fireEvent.click(button)});
 
     //Confirm input was wiped
-    expect(titleInput.value).toBe(TEST_TITLE_2);
-    expect(ingredientsInput.value).toBe(TEST_INGREDIENTS_2);
-    expect(instructionsInput.value).toBe(TEST_INSTRUCTIONS_2);
+    expect(titleInput.value).toBe("");
+    expect(ingredientsInput.value).toBe("");
+    expect(instructionsInput.value).toBe("");
 
     //Confirm recipe 2 is no longer in list
     await act(async () => {fireEvent.click(recipeListButton)});
@@ -458,7 +468,7 @@ test('saying "ingredients" reads all ingredients', async () =>
     expect(log).toHaveBeenCalledWith("You will need the following ingredients:");
 
     //Check to make sure every ingredient was read
-    ExpectAllIngredientsRead();
+    ExpectAllIngredientsRead(TEST_INGREDIENTS_CONVERTED_1);
 });
 
 test('saying "continue ingredients" at the beginning reads all ingredients', async () =>
@@ -471,7 +481,7 @@ test('saying "continue ingredients" at the beginning reads all ingredients', asy
     expect(log).toHaveBeenCalledWith("You will need the following ingredients:");
 
     //Check to make sure every ingredient was read
-    ExpectAllIngredientsRead();
+    ExpectAllIngredientsRead(TEST_INGREDIENTS_CONVERTED_1);
 });
 
 test('reading list of ingredients with only two items', async () =>
@@ -496,11 +506,11 @@ test('saying "slowly" and then "ingredients" reads all ingredients one at a time
     await act(async () => {fireEvent.click(startReadingButton)});
 
     //Toggle slow mode
-    await act(async () =>{annyang.trigger("slowly")});
+    await act(async () => {annyang.trigger("slowly")});
     expect(log).toHaveBeenLastCalledWith(`Lines will now be read one at a time. To hear the next line, say "next" or "continue".`);
 
     //Start reading the ingredients and check to make sure the first ingredient was read
-    await act(async () =>{annyang.trigger("ingredients")});
+    await act(async () => {annyang.trigger("ingredients")});
     let ingredientsList = TEST_INGREDIENTS_CONVERTED_1.split("\n");
     expect(log).toHaveBeenLastCalledWith(ingredientsList[0]);
 
@@ -565,6 +575,66 @@ test('saying "faster" when "ingredients" are being read slowly should read the r
     }
 });
 
+test('reading instructions with sections', async () =>
+{
+    FillRecipe4();
+
+    //Click the start button and say "ingredients"
+    await act(async () => {fireEvent.click(startReadingButton)});
+    await act(async () => {annyang.trigger("ingredients")});
+    expect(log).toHaveBeenCalledWith("You will need the following ingredients:");
+
+    //Check to make sure every ingredient was read
+    ExpectAllIngredientsRead(TEST_INGREDIENTS_CONVERTED_4);
+});
+
+test('reading ingredients with sections slowly', async () =>
+{
+    FillRecipe4();
+
+    //Click the start button, toggle slow mode, and start reading ingredients
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Toggle slow mode and start reading the ingredients
+    await act(async () =>
+    {
+        annyang.trigger("slowly");
+        annyang.trigger("ingredients");
+    });
+
+    //Check to make sure the first section and first ingredient were read
+    let ingredientsList = TEST_INGREDIENTS_CONVERTED_4.split("\n");
+    expect(log).toHaveBeenCalledWith(ingredientsList[0]);
+    expect(log).toHaveBeenLastCalledWith(ingredientsList[1]);
+
+    //Check to make sure the rest of the ingredient list wasn't read
+    for (let i = 2; i < ingredientsList.length; ++i)
+        expect(log).not.toHaveBeenCalledWith(ingredientsList[i]);
+
+    //Say "next" multiple times and hear the rest of the ingredient list read one at a time
+    for (let i = 2; i < ingredientsList.length; ++i)
+    {
+        await act(async () => {annyang.trigger("next")});
+
+        let ingredient = ingredientsList[i];
+        
+        if (i + 1 >= ingredientsList.length) //Last ingredient is slightly different
+            ingredient = "And finally, " + ingredient;
+
+        if (ingredient.endsWith(":"))
+        {
+            //Should read the section and immediately the next ingredient
+            expect(log).toHaveBeenCalledWith(ingredient);
+            expect(log).toHaveBeenLastCalledWith(ingredientsList[i + 1]);
+            ++i; //Skip the next ingredient since it was already read
+        }
+
+        //Check to make sure the rest of the ingredient list wasn't read
+        for (let j = i + 1; j < ingredientsList.length; ++j)
+            expect(log).not.toHaveBeenCalledWith(ingredientsList[j]);
+    }
+});
+
 test('how much of ingredient', async () =>
 {
     FillRecipe1();
@@ -617,6 +687,24 @@ test('how much of ingredient', async () =>
     //Ask how much of chip (instead of chips)
     await act(async () => {annyang.trigger("how much chip")});
     expect(log).toHaveBeenLastCalledWith("1 bag of chips");
+
+    //Change to recipe 4
+    FillRecipe4();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Ask how much of section name
+    await act(async () => {annyang.trigger("how much section")});
+    expect(log).toHaveBeenLastCalledWith("section was not found in the ingredients.");
+
+    //Ask how much of ingredient with multiple matches
+    await act(async () => {annyang.trigger("how much ingredient")});
+    expect(log).toHaveBeenLastCalledWith(`There are multiple ingredients with "ingredient". `
+                                       + `for section 1, ingredient 1. `
+                                       + `for section 1, ingredient 2. `
+                                       + `for section 2, ingredient 3. and `
+                                       + `for section 2, ingredient 4`);
 });
 
 test('saying "instructions" reads all instructions', async () =>

@@ -14,6 +14,19 @@ export const TEST_INGREDIENTS_1 =
 - 2 tsp peppermint extract
 - 2 cups chocolate chips`;
 
+export const TEST_INGREDIENTS_INPUT_CONVERTED_1 =
+`• 3 cups (or 360 g) all-purpose flour
+• 1 tsp baking soda
+• 1 tsp sea salt
+• 1/2 tsp baking powder
+• 227 g butter
+• 1 cup white sugar
+• 1 cup brown sugar
+• 2 large eggs
+• 2 tsp vanilla extract
+• 2 tsp peppermint extract
+• 2 cups chocolate chips`;
+
 export const TEST_INGREDIENTS_CONVERTED_1 =
 `3 cups (or 360 g) all-purpose flour
 1 tsp baking soda
@@ -68,6 +81,11 @@ export const TEST_INGREDIENTS_2 =
 - 1 bag of chips
 - 2 cups boiling water`;
 
+export const TEST_INGREDIENTS_INPUT_CONVERTED_2 =
+`• 4 tbsp oil
+• 1 bag of chips
+• 2 cups boiling water`;
+
 export const TEST_INGREDIENTS_CONVERTED_2 =
 `4 tbsp oil
 1 bag of chips
@@ -111,3 +129,35 @@ export const TEST_INSTRUCTIONS_3_CONVERTED =
 dummy step 1 part 2
 Step 2. dummy step 2 ingredient ingredient
 Step 3. dummy step 3`;
+
+
+//Dummy Recipe 4//
+export const TEST_TITLE_4 = "Test Dummy Recipe 4";
+
+export const TEST_INGREDIENTS_4 =
+`Section 1:
+- ingredient 1
+- ingredient 2
+
+Section 2:
+- ingredient 3
+- ingredient 4`;
+
+export const TEST_INGREDIENTS_INPUT_CONVERTED_4 =
+`Section 1:
+• ingredient 1
+• ingredient 2
+
+Section 2:
+• ingredient 3
+• ingredient 4`;
+
+export const TEST_INGREDIENTS_CONVERTED_4 =
+`for section 1:
+ingredient 1
+ingredient 2
+for section 2:
+ingredient 3
+ingredient 4`;
+
+export const TEST_INSTRUCTIONS_4 = "None"
