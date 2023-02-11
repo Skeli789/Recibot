@@ -3,11 +3,12 @@ import annyang from 'annyang';
 
 
 import Recipe from '../Recipe';
-import {TEST_TITLE_1, TEST_TITLE_2, TEST_TITLE_3,
+import {TEST_TITLE_1, TEST_TITLE_2, TEST_TITLE_3, TEST_TITLE_4, TEST_TITLE_5,
         TEST_INGREDIENTS_1, TEST_INGREDIENTS_INPUT_CONVERTED_1, TEST_INGREDIENTS_CONVERTED_1, TEST_INSTRUCTIONS_1, TEST_INSTRUCTIONS_CONVERTED_1, 
         TEST_INGREDIENTS_2, TEST_INGREDIENTS_INPUT_CONVERTED_2, TEST_INSTRUCTIONS_2, TEST_INSTRUCTIONS_CONVERTED_2, 
         TEST_INGREDIENTS_3, TEST_INGREDIENTS_CONVERTED_3, TEST_INSTRUCTIONS_3, TEST_INSTRUCTIONS_3_NO_NUMS, TEST_INSTRUCTIONS_3_CONVERTED,
-        TEST_TITLE_4, TEST_INGREDIENTS_4, TEST_INGREDIENTS_INPUT_CONVERTED_4, TEST_INGREDIENTS_CONVERTED_4, TEST_INSTRUCTIONS_4} from './TestRecipes';
+        TEST_INGREDIENTS_4, TEST_INGREDIENTS_INPUT_CONVERTED_4, TEST_INGREDIENTS_CONVERTED_4, TEST_INSTRUCTIONS_4, TEST_INSTRUCTIONS_4_CONVERTED,
+        TEST_INGREDIENTS_5, TEST_INGREDIENTS_CONVERTED_5, TEST_INSTRUCTIONS_5, TEST_INSTRUCTIONS_5_CONVERTED} from './TestRecipes';
 
 
 //Mock Annyang Libray//
@@ -162,6 +163,16 @@ function FillRecipe4()
         fireEvent.change(titleInput, {target: {value: TEST_TITLE_4}});
         fireEvent.change(ingredientsInput, {target: {value: TEST_INGREDIENTS_4}});
         fireEvent.change(instructionsInput, {target: {value: TEST_INSTRUCTIONS_4}});
+    });
+}
+
+function FillRecipe5()
+{
+    act(() =>
+    {
+        fireEvent.change(titleInput, {target: {value: TEST_TITLE_5}});
+        fireEvent.change(ingredientsInput, {target: {value: TEST_INGREDIENTS_5}});
+        fireEvent.change(instructionsInput, {target: {value: TEST_INSTRUCTIONS_5}});
     });
 }
 
@@ -465,7 +476,7 @@ test('saying "ingredients" reads all ingredients', async () =>
     //Click the start button and say "ingredients"
     await act(async () => {fireEvent.click(startReadingButton)});
     await act(async () => {annyang.trigger("ingredients")});
-    expect(log).toHaveBeenCalledWith("You will need the following ingredients:");
+    expect(log).toHaveBeenCalledWith(`You will need the following ingredients for ${TEST_TITLE_1}:`);
 
     //Check to make sure every ingredient was read
     ExpectAllIngredientsRead(TEST_INGREDIENTS_CONVERTED_1);
@@ -478,7 +489,7 @@ test('saying "continue ingredients" at the beginning reads all ingredients', asy
     //Click the start button and say "ingredients"
     await act(async () => {fireEvent.click(startReadingButton)});
     await act(async () => {annyang.trigger("continue ingredients")});
-    expect(log).toHaveBeenCalledWith("You will need the following ingredients:");
+    expect(log).toHaveBeenCalledWith(`You will need the following ingredients for ${TEST_TITLE_1}:`);
 
     //Check to make sure every ingredient was read
     ExpectAllIngredientsRead(TEST_INGREDIENTS_CONVERTED_1);
@@ -575,14 +586,14 @@ test('saying "faster" when "ingredients" are being read slowly should read the r
     }
 });
 
-test('reading instructions with sections', async () =>
+test('reading ingredients with sections', async () =>
 {
     FillRecipe4();
 
     //Click the start button and say "ingredients"
     await act(async () => {fireEvent.click(startReadingButton)});
     await act(async () => {annyang.trigger("ingredients")});
-    expect(log).toHaveBeenCalledWith("You will need the following ingredients:");
+    expect(log).toHaveBeenCalledWith(`You will need the following ingredients for ${TEST_TITLE_4}:`);
 
     //Check to make sure every ingredient was read
     ExpectAllIngredientsRead(TEST_INGREDIENTS_CONVERTED_4);
@@ -658,6 +669,11 @@ test('how much of ingredient', async () =>
     await act(async () => {annyang.trigger("how much sugar")});
     expect(log).toHaveBeenLastCalledWith('There are multiple ingredients with "sugar". 1 cup white sugar, and 1 cup brown sugar');
 
+    //Ask how much of ingredient who's word is partially in another word
+    await act(async () => {annyang.trigger("how much salt")});
+    expect(log).toHaveBeenLastCalledWith("1 tsp sea salt");
+
+
     //Change to recipe 2
     FillRecipe2();
 
@@ -688,6 +704,7 @@ test('how much of ingredient', async () =>
     await act(async () => {annyang.trigger("how much chip")});
     expect(log).toHaveBeenLastCalledWith("1 bag of chips");
 
+
     //Change to recipe 4
     FillRecipe4();
 
@@ -698,6 +715,10 @@ test('how much of ingredient', async () =>
     await act(async () => {annyang.trigger("how much section")});
     expect(log).toHaveBeenLastCalledWith("section was not found in the ingredients.");
 
+    //Ask how much of general ingredient
+    await act(async () => {annyang.trigger("how much ingredient 1")});
+    expect(log).toHaveBeenLastCalledWith("ingredient 1");
+
     //Ask how much of ingredient with multiple matches
     await act(async () => {annyang.trigger("how much ingredient")});
     expect(log).toHaveBeenLastCalledWith(`There are multiple ingredients with "ingredient". `
@@ -705,6 +726,17 @@ test('how much of ingredient', async () =>
                                        + `for section 1, ingredient 2. `
                                        + `for section 2, ingredient 3. and `
                                        + `for section 2, ingredient 4`);
+
+
+    //Change to recipe 5
+    FillRecipe5();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Ask how much of section name that's also ingredient
+    await act(async () => {annyang.trigger("how much tofu")});
+    expect(log).toHaveBeenLastCalledWith("1 16 ounce block of firm or extra firm tofu, pressed, and torn into 1 to 2 inch pieces");
 });
 
 test('saying "instructions" reads all instructions', async () =>
@@ -714,7 +746,7 @@ test('saying "instructions" reads all instructions', async () =>
     //Click the start button and say "instructions"
     await act(async () => {fireEvent.click(startReadingButton)});
     await act(async () => {annyang.trigger("instructions")});
-    expect(log).toHaveBeenCalledWith("You will need to follow these steps:");
+    expect(log).toHaveBeenCalledWith(`You will need to follow these steps for ${TEST_TITLE_1}:`);
 
     //Check to make sure every instruction part was read
     let instructionsList = TEST_INSTRUCTIONS_CONVERTED_1.split("\n");
@@ -729,7 +761,7 @@ test('saying "continue instructions" at the beginning reads all instructions', a
     //Click the start button and say "instructions"
     await act(async () => {fireEvent.click(startReadingButton)});
     await act(async () => {annyang.trigger("continue instructions")});
-    expect(log).toHaveBeenCalledWith("You will need to follow these steps:");
+    expect(log).toHaveBeenCalledWith(`You will need to follow these steps for ${TEST_TITLE_1}:`);
 
     //Check to make sure every instruction part was read
     let instructionsList = TEST_INSTRUCTIONS_CONVERTED_1.split("\n");
@@ -792,6 +824,10 @@ test('saying "slowly" and then "instructions" reads all instructions one at a ti
     for (let i = 1; i < instructionsList.length; ++i)
         expect(log).not.toHaveBeenCalledWith(instructionsList[i]);
 
+    //Check saying "repeat" doesn't cause a "continue instructions" afterwards
+    await act(async () => {annyang.trigger("repeat")});
+    await act(async () => {annyang.trigger("repeat last step")});
+
     //Say "next" multiple times and hear the rest of the instruction list read one at a time
     for (let i = 1; i < instructionsList.length; ++i)
     {
@@ -850,11 +886,11 @@ test('intrrupting slow "instructions" with ingredients still finishes instructio
 
     //Side tangent asking about an ingredient
     await act(async () => {annyang.trigger("how much butter")});
-    expect(log).toHaveBeenLastCalledWith("227 g butter");
+    expect(log).toHaveBeenLastCalledWith("227 g unsalted butter");
     
     //Test repeating the last said phrase
     await act(async () => {annyang.trigger("repeat")});
-    expect(log).toHaveBeenLastCalledWith("227 g butter");
+    expect(log).toHaveBeenLastCalledWith("227 g unsalted butter");
 
     //Test repeating the last step said
     await act(async () => {annyang.trigger("repeat last step")});
@@ -895,6 +931,47 @@ test('intrrupting slow "instructions" with ingredients still finishes instructio
     //Read instruction line 5
     await act(async () => {annyang.trigger("next")});
     expect(log).toHaveBeenLastCalledWith("1 tsp sea salt");
+});
+
+test('reading instructions with ingredient sections', async () =>
+{
+    FillRecipe4();
+
+    //Click the start button and say "instructions"
+    await act(async () => {fireEvent.click(startReadingButton)});
+    await act(async () => {annyang.trigger("instructions")});
+    expect(log).toHaveBeenCalledWith(`You will need to follow these steps for ${TEST_TITLE_4}:`);
+
+    //Check to make sure every instruction part was read and ingredients were substituted correctly
+    let instructionsList = TEST_INSTRUCTIONS_4_CONVERTED.split("\n");
+    for (let instruction of instructionsList)
+        expect(log).toHaveBeenCalledWith(instruction);
+});
+
+test('reading practical instructions with ingredient sections', async () =>
+{
+    FillRecipe5();
+
+    //Click the start button and start reading instructions slowly
+    await act(async () => {fireEvent.click(startReadingButton)});
+    await act(async () =>
+    {
+        annyang.trigger("slowly");
+        annyang.trigger("instructions"); //Read instruction line 1
+    });
+
+    //Check to make sure every instruction part was read and ingredients were substituted correctly
+    let instructionsList = TEST_INSTRUCTIONS_5_CONVERTED.split("\n");
+
+    expect(log).toHaveBeenCalledWith(`You will need to follow these steps for ${TEST_TITLE_5}:`);
+    expect(log).toHaveBeenLastCalledWith(instructionsList[0]);
+
+    //Say "next" multiple times and hear the rest of the instruction list read one at a time
+    for (let i = 1; i < instructionsList.length; ++i)
+    {
+        await act(async () => {annyang.trigger("next")});
+        expect(log).toHaveBeenLastCalledWith(instructionsList[i]);
+    }
 });
 
 test('repeat specific instruction', async () =>
@@ -968,7 +1045,7 @@ test('read instructions and repeat a specific one in the middle', async () =>
     });
 
     //Interject and check only the first part of step 3 was read
-    let step3 = ["Step 3. in the mixing bowl, cream together 227 g butter",
+    let step3 = ["Step 3. in the mixing bowl, cream together 227 g unsalted butter",
                  "1 cup white sugar",
                  "Continuing step 3. and 1 cup brown sugar until combined",
                  'That is the end of step 3. To continue from where you left off, say "continue instructions". To continue from the next step, say "read from step 4".'];
@@ -1167,6 +1244,10 @@ test('recipe switching', async () =>
     await act(async () => {fireEvent.click(newRecipeButton)});
     FillRecipe2();
     await act(async () => {fireEvent.click(saveButton)});
+    
+    //Say current recipe
+    await act(async () => {annyang.trigger("current recipe")});
+    expect(log).toHaveBeenLastCalledWith(`Now cooking ${TEST_TITLE_2}.`);
 
     //Switch back to first recipe
     await act(async () => {annyang.trigger(`switch to ${TEST_TITLE_1}`)});
@@ -1191,6 +1272,10 @@ test('recipe switching', async () =>
 
     //Switch to third recipe successfully using a common phrase bewteen recipe 2 and 3
     await act(async () => {annyang.trigger(`switch to dummy`)});
+    expect(log).toHaveBeenLastCalledWith(`Now cooking ${TEST_TITLE_3}.`);
+
+    //Say current recipe
+    await act(async () => {annyang.trigger("which recipe")});
     expect(log).toHaveBeenLastCalledWith(`Now cooking ${TEST_TITLE_3}.`);
 
     //Toggle fast-mode and start reading instructions for recipe 3

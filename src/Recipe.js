@@ -40,7 +40,7 @@ const RECIPE_STRUCT =
 };
 const IS_TEST_ENVIRONMENT = window['speechSynthesis'] == null;
 const BLANK_LINE_REGEX = /(^[ \t]*\n)/gm;
-const SECTION_REGEX = /{.*}/g;;
+const SECTION_REGEX = /{.*}/g;
 
 //UI TODO//
 //TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
@@ -230,23 +230,28 @@ class Recipe extends Component
         });
     }
 
+    async updateRecipe(recipe, recipeId, newObj, wait=false)
+    {
+        var recipeList = this.state.recipes;
+
+        for (let key of Object.keys(newObj))
+            recipe[key] = newObj[key];
+
+        recipeList[recipeId] = recipe;
+
+        if (wait)
+            await this.setStateAndWait({recipes: recipeList});
+        else
+            this.setState({recipes: recipeList});  
+    }
+
     async updateCurrentRecipe(newObj, wait=false)
     {
         var currentRecipe = this.getCurrentRecipe();
         if (currentRecipe == null)
             return;
 
-        var recipeList = this.state.recipes;
-
-        for (let key of Object.keys(newObj))
-            currentRecipe[key] = newObj[key];
-
-        recipeList[this.state.currentRecipe] = currentRecipe;
-
-        if (wait)
-            await this.setStateAndWait({recipes: recipeList});
-        else
-            this.setState({recipes: recipeList});
+        await this.updateRecipe(currentRecipe, this.state.currentRecipe, newObj, wait);
     }
 
     async updateCurrentRecipeAndWait(newObj)
@@ -335,7 +340,7 @@ class Recipe extends Component
                 //Add | to indicate pauses after adding specific ingredients
                 let multiIngredientRegex = /<.+>,?.*\sand\s<.+>/g;
                 instruction = instruction.replace(multiIngredientRegex,
-                    match => match.replace(/,\s?/g, "|").replaceAll(/(?<!<)[ ]and(?![^<]*>)[ ]/g, "|and")); //Replaces all "," and whitespace before the and with a "|"
+                    match => match.replace(/,\s?/g, "|").replaceAll(/(?<!<)[ ]and(?![^<]*>)[ ]/g, "|and ")); //Replaces all "," and whitespace before the and with a "|"
 
                 //Replace marked ingredients with the actual raw ingredient (premium feature)
                 let ingredients = instruction.match(/<(.*?)>/g);
@@ -829,7 +834,7 @@ class Recipe extends Component
 
             if (this.getCurrentRecipe().currentlyReadingIngredientLine === 0) //Haven't started reading the ingredients
             {
-                if (await this.sayTextAndCheckStopped("You will need the following ingredients:"))
+                if (await this.sayTextAndCheckStopped(`You will need the following ingredients for ${this.getCurrentRecipe().title}:`))
                     return; //Stopped in the middle of speaking
             }
 
@@ -849,7 +854,7 @@ class Recipe extends Component
                 currentlyReadingIngredientLine: 0,
             });
 
-            if (!(await this.sayTextAndCheckStopped("You will need the following ingredients:")))
+            if (!(await this.sayTextAndCheckStopped(`You will need the following ingredients for ${this.getCurrentRecipe().title}:`)))
                 await this.readIngredientList(); //Didn't stop in the middle of speaking so continue to the ingredients
         }
     }
@@ -901,61 +906,100 @@ class Recipe extends Component
             this.sayText('To continue with the instructions, say "instructions".');
     }
 
+    searchIngredientsListFor(ingredient)
+    {
+        const ingredientsList = this.getCurrentRecipe().ingredientsList;
+        var ingredientWords = ingredient.split(" ");
+        var matches = [];
+
+        for (let item of ingredientsList)
+        {
+            let originalItem = item;
+            item = item.replace(SECTION_REGEX, ""); //Remove section names
+
+            if (item.endsWith(":"))
+                continue; //Section name
+
+            if (ingredientWords.length >= 2) //Do a straight text match for multiple words
+            {
+                if (item.includes(ingredient)
+                || item.includes(ingredient + "s") //Allows matching "cookie chip" to "cookie chips"
+                || (ingredient.endsWith("s") && item.includes(ingredient.slice(0, -1)))) //Allows matching "1 tbsp oils" to "1 tbsp oil"
+                    matches.push(originalItem);
+            }
+            else
+            {
+                //Match whole word only
+                let itemWords = item.split(" ").map(word => word.replace(/^[\W_]+|[\W_]+$/g, "")); //Remove leading and trailing punctuation
+
+                if (itemWords.indexOf(ingredient) !== -1
+                || itemWords.indexOf(ingredient + "s") !== -1 //Allows matching "chip" to "1 bag of chips"
+                || (ingredient.endsWith("s") && itemWords.indexOf(ingredient.slice(0, -1)) !== -1)) //Allows matching "oils" to "1 tbsp oil"
+                    matches.push(originalItem);
+            }
+        }
+
+        return matches;
+    }
+
     howMuchIngredient(ingredient)
     {
+        var matches, match;
         var matchIndex = 0; //The user can specify which match if there are multiple matches using []
         ingredient = ingredient.toLowerCase();
 
         let specificNum = ingredient.match(/\[(.*?)\]/g);
         if (specificNum)
         {
-            try
-            {
-                ingredient = ingredient.replace(/\[(.*?)\]/g, "").trim();
-                matchIndex = parseInt(specificNum[0].replace(/\[*\]*/g, "")) - 1; //1-indexed
-            }
-            catch (e)
-            {
-                console.log(`Error replacing match index in "${ingredient}": ${e}`);
-            }
+            ingredient = ingredient.replace(/\[(.*?)\]/g, "").trim();
+            specificNum = specificNum[0].replace(/\[*\]*/g, "").toLowerCase();
+            matchIndex = parseInt(specificNum) - 1; //1-indexed
         }
 
-        var matches = this.getCurrentRecipe().ingredientsList.filter(item => item.includes(ingredient) && !item.endsWith(":"));
+        matches = this.searchIngredientsListFor(ingredient);
 
         if (matches.length === 1)
-            return matches[0];
+            match = matches[0];
+        else if (isNaN(matchIndex)) //Specific section name was referred to in the []
+        {
+            match = matches.filter(item => item.toLowerCase().startsWith(`{${specificNum}}`)); //specificNum in this case is the name of a section
+            if (match.length > 0)
+            {
+                match = match[0];
+                console.log(`Warning! The ingredient "${ingredient}" was not found in any section named "${specificNum}"`);
+            }
+            else //Section name was non-existent
+                match = ingredient; //Just match the first ingredient
+        }
         else if (matchIndex < matches.length)
-            return matches[matchIndex]; //Match the request index in this list
+            match = matches[matchIndex]; //Match the request index in this list
         else
-            return ingredient; //Just match the first ingredient
+            match = ingredient; //Just match the first ingredient
+
+        let section = match.match(SECTION_REGEX);
+        if (section)
+            match = match.replace(SECTION_REGEX, "");
+
+        return match;
     }
 
     repeatSpecificIngredient(ingredient)
     {
-        var matches, ingredientWords;
-        const ingredientsList = this.getCurrentRecipe().ingredientsList;
+        var matches;
         ingredient = ingredient.toLowerCase();
-        ingredientWords = ingredient.split(" ");
 
-        if (ingredientWords.length >= 2) //Do a straight text match for multiple words
-        {
-            matches = ingredientsList
-                        .filter(item => !item.endsWith(":") && (item.includes(ingredient) //Exclude section lines
-                                    || (ingredient.endsWith("s") && item.includes(ingredient.slice(0, -1))))); //Allows matching "oils" to "1 tbsp oil"
-        }
-        else
-        {
-            matches = ingredientsList
-                        .filter(item => !item.endsWith(":")
-                                   && (item.replace(SECTION_REGEX, "").split(" ").indexOf(ingredient) !== -1
-                                    || item.replace(SECTION_REGEX, "").split(" ").indexOf(ingredient + "s") !== -1 //Allows matching "chip" to "1 bag of chips"
-                                    || (ingredient.endsWith("s") && item.replace(SECTION_REGEX, "").split(" ").indexOf((ingredient.slice(0, -1))) !== -1))); //Allows matching "oils" to "1 tbsp oil"
-        }
-
+        matches = this.searchIngredientsListFor(ingredient);
         if (matches.length === 0)
             this.sayText(`${ingredient} was not found in the ingredients.`);
         else if (matches.length === 1)
-            this.sayText(matches[0]);
+        {
+            let match = matches[0];
+            let section = match.match(SECTION_REGEX);
+            if (section)
+                match = match.replace(SECTION_REGEX, "");
+
+            this.sayText(match);
+        }
         else
         {
             let textToSay = `There are multiple ingredients with "${ingredient}". `;
@@ -1017,7 +1061,7 @@ class Recipe extends Component
 
             if (!this.startedReadingInstructions())
             {
-                if (await this.sayTextAndCheckStopped("You will need to follow these steps:"))
+                if (await this.sayTextAndCheckStopped(`You will need to follow these steps for ${this.getCurrentRecipe().title}:`))
                     return; //Stopped in the middle of speaking
             }
 
@@ -1039,7 +1083,7 @@ class Recipe extends Component
                 repeatingSpecificStep: -1, //Cancel if one was in the middle
             });
 
-            if (!(await this.sayTextAndCheckStopped("You will need to follow these steps:")))
+            if (!(await this.sayTextAndCheckStopped(`You will need to follow these steps for ${this.getCurrentRecipe().title}:`)))
                 await this.readInstructionList(); //Didn't stop in the middle of speaking so continue to the instructions    
         }
     }
