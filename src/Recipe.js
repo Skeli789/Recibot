@@ -41,6 +41,7 @@ const RECIPE_STRUCT =
 const IS_TEST_ENVIRONMENT = window['speechSynthesis'] == null;
 const BLANK_LINE_REGEX = /(^[ \t]*\n)/gm;
 const SECTION_REGEX = /{.*}/g;
+const WAITING_FOR_NEXT_LIMIT = 3 * 60 * 1000; //Wait three minutes before saying "continuing step X" after hearing a "next" when waiting for nex
 
 //UI TODO//
 //TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
@@ -83,6 +84,7 @@ class Recipe extends Component
             utterance: utterance,
             paused: false,
             waitingForNext: false,
+            startingWaitingForNext: false,
             stepByStep: false,
             voiceId: voiceId,
             speakingId: 0,
@@ -179,6 +181,7 @@ class Recipe extends Component
             currentRecipe: -1,
             paused: false,
             waitingForNext: false,
+            startingWaitingForNext: 0,
             savedChanges: true,
         }); 
     }
@@ -226,6 +229,7 @@ class Recipe extends Component
             currentRecipe: recipeId,
             paused: false,
             waitingForNext: false,
+            startingWaitingForNext: 0,
             savedChanges: true,
         });
     }
@@ -655,6 +659,7 @@ class Recipe extends Component
             utterance: utterance,
             paused: false,
             waitingForNext: false,
+            startingWaitingForNext: 0,
         });
         this.updateCurrentRecipe({lastSpoken: text});
 
@@ -773,11 +778,31 @@ class Recipe extends Component
     {
         if (this.state.stepByStep)
         {
-            this.setState({waitingForNext: true});
+            this.setState
+            ({
+                waitingForNext: true,
+                startingWaitingForNext: Date.now(),
+            });
             return true;
         }
 
         return false;
+    }
+
+    waitedTooLongForNext()
+    {
+        return this.state.startingWaitingForNext !== 0
+            && Date.now() - this.state.startingWaitingForNext > WAITING_FOR_NEXT_LIMIT;
+    }
+
+    tryKeepWaitingForNextAfterRepeatedText()
+    {
+        if (this.getCurrentRecipe().readingState !== READING_INGREDIENTS)
+        {
+            let startingWaitingForNext = this.state.startingWaitingForNext;
+            this.shouldWaitForNext(); //So it doesn't say "continuing step" if saying "next" immediately after
+            this.setState({startingWaitingForNext: startingWaitingForNext}); //Shouldn't change just because the last instruction has been repeated. The user still may not know which step they're on.
+        } 
     }
 
     repeatLastSpoken()
@@ -787,7 +812,10 @@ class Recipe extends Component
             var lastSpoken = this.getCurrentRecipe().lastSpoken;
 
             if (lastSpoken.length > 0)
+            {
                 this.sayText(lastSpoken);
+                this.tryKeepWaitingForNextAfterRepeatedText();
+            }
             else
                 this.sayText("Nothing has been spoken yet");
         }
@@ -800,7 +828,10 @@ class Recipe extends Component
             var lastStepSpoken = this.getCurrentRecipe().lastStepSpoken;
 
             if (lastStepSpoken.length > 0)
+            {
                 this.sayText(lastStepSpoken);
+                this.tryKeepWaitingForNextAfterRepeatedText();
+            }
             else
                 this.sayText("No instruction has been spoken yet");
         }
@@ -1106,7 +1137,7 @@ class Recipe extends Component
                     firstInstruction = false;
                     if (j === 0)
                         textToSay = `Step ${i + 1}. ` + textToSay;
-                    else if (!this.state.waitingForNext)
+                    else if (!this.state.waitingForNext || this.waitedTooLongForNext())
                         textToSay = `Continuing step ${i + 1}. ` + textToSay;
                 }
 
@@ -1212,7 +1243,7 @@ class Recipe extends Component
                 firstInstruction = false;
                 if (j === 0)
                     textToSay = `Step ${i + 1}. ` +  textToSay;
-                else if (!this.state.waitingForNext)
+                else if (!this.state.waitingForNext || this.waitedTooLongForNext())
                     textToSay = `Continuing step ${i + 1}. ` +  textToSay;
             }
 
