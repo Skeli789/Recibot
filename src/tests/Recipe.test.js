@@ -1134,6 +1134,34 @@ test('read instructions, repeat a specific one in the middle, then read ingredie
     expect(log).toHaveBeenLastCalledWith("Continuing step 2. 1 tsp baking soda");
 });
 
+test('skip step', async () =>
+{
+    FillRecipe1();
+
+    //Click the start button and toggle slow mode
+    await act(async () => {fireEvent.click(startReadingButton)});
+    await act(async () => {annyang.trigger("slowly")});
+
+    //Confirm skipping step does nothing now
+    await act(async () => {annyang.trigger("skip step")});
+    expect(log).toHaveBeenLastCalledWith(`Lines will now be read one at a time. To hear the next line, say "next" or "continue".`);
+
+    //Start reading instructions then skip the rest of the step
+    await act(async () => {annyang.trigger("instructions")}); //Read instruction line 1
+    await act(async () => {annyang.trigger("skip step")});
+    expect(log).toHaveBeenLastCalledWith("Step 2. in a separate bowl mix 3 cups (or 360 g) all-purpose flour");
+
+    //Toggle fast mode and read rest of instructions
+    await act(async () => {annyang.trigger("faster")});
+    await act(async () => {annyang.trigger("next")});
+    let doneStep = `You've reached the end of the instructions for ${TEST_TITLE_1}!`;
+    expect(log).toHaveBeenLastCalledWith(doneStep);
+
+    //Trying to skip step should do nothing
+    await act(async () => {annyang.trigger("skip step")});
+    expect(log).toHaveBeenLastCalledWith(doneStep);
+});
+
 test('which step am I on', async () =>
 {
     FillRecipe1();

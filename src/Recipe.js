@@ -565,12 +565,16 @@ class Recipe extends Component
 
                     //Instructions Commands
                     "continue (reading) instruction(s)":    this.readInstructions.bind(this),
+                    "continuing (reading) instruction(s)":  this.readInstructions.bind(this),
                     "continue repeating step(s)":           this.continueRepeatingSpecificStep.bind(this),
+                    "continuing repeating step(s)":         this.continueRepeatingSpecificStep.bind(this),
                     "(read) (list) instruction(s)":         this.readInstructionListFromScratch.bind(this),
                     "repeat last step":                     this.repeatLastStep.bind(this),
+                    "repeat from step *number": (number) => this.readInstructionListFromStep(number),
                     "read from step *number":   (number) => this.readInstructionListFromStep(number),
                     "read step *number":        (number) => this.repeatSpecificStepFromScratch(number),
                     "repeat step *number":      (number) => this.repeatSpecificStepFromScratch(number),
+                    "skip step":                            this.skipStep.bind(this),
 
                     //Instructions Queries
                     "which step has (the word) *details": (details) => this.findSpecificStepWith(details),
@@ -1085,6 +1089,7 @@ class Recipe extends Component
         else
         {
             this.updateCurrentRecipe
+            await this.updateCurrentRecipeAndWait
             ({
                 readingState: READING_INSTRUCTIONS,
                 repeatingSpecificStep: -1, //Cancel if one was in the middle
@@ -1191,6 +1196,25 @@ class Recipe extends Component
             if (this.debugLog())
                 console.log(error);
             this.sayText(error);
+        }
+    }
+
+    async skipStep()
+    {
+        var nextStep = this.getCurrentRecipe().currentlyReadingInstructionLine + 1;
+
+        if (this.getCurrentRecipe().readingState === READING_INSTRUCTIONS
+        && !this.isNotValidStepNumber(nextStep)) //Is valid step
+        {
+            this.stopTalking();
+
+            await this.updateCurrentRecipeAndWait
+            ({
+                currentlyReadingInstructionLine: nextStep,
+                currentlyReadingSubInstructionLine: 0,
+            });
+
+            await this.readInstructionList();
         }
     }
 
