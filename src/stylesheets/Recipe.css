@@ -7,6 +7,7 @@
 {
     display: flex;
     flex-direction: row;
+    justify-content: space-between;
     height: 50px;
     background-color: #45a049;
 }
@@ -17,6 +18,16 @@
 }
 
 .voice-list-button
+{
+    width: fit-content;
+}
+
+.timer-list
+{
+    margin-right: 1%;
+}
+
+.timer-list-button
 {
     width: fit-content;
 }

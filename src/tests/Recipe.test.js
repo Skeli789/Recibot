@@ -191,6 +191,10 @@ function ExpectAllIngredientsRead(convertedIngredients)
     }
 }
 
+const sleep = ms => new Promise(
+    resolve => setTimeout(resolve, ms)
+);
+
 
 //Tests//
 
@@ -1315,4 +1319,522 @@ test('recipe switching', async () =>
 
     for (let instruction of TEST_INSTRUCTIONS_3_CONVERTED.split("\n"))
         expect(log).toHaveBeenCalledWith(instruction);
+});
+
+test('setting seconds timer', async () =>
+{
+    FillRecipe1();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Start a 2 second timer
+    let timerName1 = "test two seconds";
+    await act(async () => {annyang.trigger(`start set a timer for two seconds named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName1}" lasting 2 seconds.`);
+
+    //Start a 1 second timer
+    let timerName2 = "test one second";
+    await act(async () => {annyang.trigger(`start set a timer for 1 second named called ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName2}" lasting 1 second.`);
+
+    //Start an already existing timer
+    await act(async () => {annyang.trigger(`start set a timer for 1 second named called ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`There is already an active timer for "${timerName2}".`);
+
+    //Wait for the 1 second timer to finish
+    await sleep(1100);
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName2}" is done.`);
+
+    //Wait for the 2 second timer to finish
+    await sleep(1000);
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" is done.`);
+});
+
+test('setting minutes timer', async () =>
+{
+    FillRecipe1();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Start a 1 minute timer
+    let timerName1 = "test one minute";
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName1}" lasting 1 minute.`);
+
+    //Start a 2 minute timer
+    let timerName2 = "test two minutes";
+    await act(async () => {annyang.trigger(`start set a timer for two minutes named called ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName2}" lasting 2 minutes.`);
+
+    //Start a 90 second timer
+    let timerName3 = "test 90 seconds";
+    await act(async () => {annyang.trigger(`start set a timer for ninety seconds named called ${timerName3}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName3}" lasting 1 minute, 30 seconds.`);
+
+    //Wait for a little over 1 second and make sure the timers properly updated
+    await sleep(1100);
+    await act(async () => {annyang.trigger(`how much time left on ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" has 59 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName2}" has 1 minute, 59 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName3}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName3}" has 1 minute, 29 seconds remaining.`);
+});
+
+test('setting hours timer', async () =>
+{
+    FillRecipe1();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Start a 1 hour timer
+    let timerName1 = "test one hour";
+    await act(async () => {annyang.trigger(`start set a timer for 1 hour named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName1}" lasting 1 hour.`);
+
+    //Start a 2 hour timer
+    let timerName2 = "test two hours";
+    await act(async () => {annyang.trigger(`start set a timer for two hours named called ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName2}" lasting 2 hours.`);
+
+    //Star a timer with too many hours
+    let timerName3 = "test 100 hours";
+    await act(async () => {annyang.trigger(`start set a timer for 100 hours named called ${timerName3}`)});
+    expect(log).toHaveBeenLastCalledWith(`100 is not a valid hour to set for the timer. It must be greater than 0 and up to 24.`);
+
+    //Wait for a little over 1 second and make sure the timers properly updated
+    await sleep(1100);
+    await act(async () => {annyang.trigger(`how much time left on ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" has 59 minutes, 59 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName2}" has 1 hour, 59 minutes, 59 seconds remaining.`);
+});
+
+test('setting hours-minutes timer', async () =>
+{
+    FillRecipe1();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Start a 1 hour 70 minutes timer
+    let badTimerName = "test 1 hour 70 minutes";
+    await act(async () => {annyang.trigger(`start set a timer for 1 hour and 70 minutes named called ${badTimerName}`)});
+    expect(log).toHaveBeenLastCalledWith(`70 is not a valid minute to set for the timer. It must be greater than 0 and up to 59.`);
+
+    //Start a 1 hour 30 minutes timer
+    let timerName1 = "test 1 hour 30 minutes";
+    await act(async () => {annyang.trigger(`start set a timer for 1 hour and 30 minutes named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName1}" lasting 1 hour, 30 minutes.`);
+
+    //Start a 1 and a half hours timer
+    let timerName2 = "test 1 and a half hours";
+    await act(async () => {annyang.trigger(`start set a timer for 1 and a half hours named called ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName2}" lasting 1 hour, 30 minutes.`);
+
+    //Start a 1 hour and a half timer
+    let timerName3 = "test 1 a half hours";
+    await act(async () => {annyang.trigger(`start set a timer for 1 hour and a half named called ${timerName3}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName3}" lasting 1 hour, 30 minutes.`);
+
+    //Start an hour and a half timer
+    let timerName4 = "test an hour and a half";
+    await act(async () => {annyang.trigger(`start set a timer for an hour and a half named called ${timerName4}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName4}" lasting 1 hour, 30 minutes.`);
+
+    //Start a 90 minute timer
+    let timerName5 = "test 90 minutes";
+    await act(async () => {annyang.trigger(`start set a timer for 90 minutes named called ${timerName5}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName5}" lasting 1 hour, 30 minutes.`);
+
+    //Wait for a little over 1 second and make sure the timers properly updated
+    await sleep(1100);
+    await act(async () => {annyang.trigger(`how much time left on ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" has 1 hour, 29 minutes, 59 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName2}" has 1 hour, 29 minutes, 59 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName3}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName3}" has 1 hour, 29 minutes, 59 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName4}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName4}" has 1 hour, 29 minutes, 59 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName5}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName5}" has 1 hour, 29 minutes, 59 seconds remaining.`);
+
+    //Wait for a little over another second and make sure the timer properly updated again
+    await sleep(1100);
+    await act(async () => {annyang.trigger(`how much time left on ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" has 1 hour, 29 minutes, 58 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName2}" has 1 hour, 29 minutes, 58 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName3}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName3}" has 1 hour, 29 minutes, 58 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName4}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName4}" has 1 hour, 29 minutes, 58 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName5}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName5}" has 1 hour, 29 minutes, 58 seconds remaining.`);
+});
+
+test('setting minutes-seconds timer', async () =>
+{
+    FillRecipe1();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Start a 1 minute 70 seconds timer
+    let badTimerName = "test 1 minute 70 seconds";
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute and 70 seconds named called ${badTimerName}`)});
+    expect(log).toHaveBeenLastCalledWith(`70 is not a valid second to set for the timer. It must be greater than 0 and up to 59.`);
+
+    //Start a 1 minute 30 seconds timer
+    let timerName1 = "test 1 minute 30 seconds";
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute and 30 seconds named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName1}" lasting 1 minute, 30 seconds.`);
+
+    //Start a 1 and a half minutes timer
+    let timerName2 = "test 1 and a half minutes";
+    await act(async () => {annyang.trigger(`start set a timer for 1 and a half minutes named called ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName2}" lasting 1 minute, 30 seconds.`);
+
+    //Start a 1 minute and a half timer
+    let timerName3 = "test 1 a half minutes";
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute and a half named called ${timerName3}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName3}" lasting 1 minute, 30 seconds.`);
+
+    //Start an minute and a half timer
+    let timerName4 = "test a minute and a half";
+    await act(async () => {annyang.trigger(`start set a timer for a minute and a half named called ${timerName4}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName4}" lasting 1 minute, 30 seconds.`);
+
+    //Start a 90 second timer
+    let timerName5 = "test 90 seconds";
+    await act(async () => {annyang.trigger(`start set a timer for 90 seconds named called ${timerName5}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName5}" lasting 1 minute, 30 seconds.`);
+
+    //Start a 1 hour 1 second timer
+    let timerName6 = "test 3601 seconds"
+    await act(async () => {annyang.trigger(`start set a timer for 3601 seconds named called ${timerName6}`)});
+    expect(log).toHaveBeenLastCalledWith(`Started a timer called "${timerName6}" lasting 1 hour, 1 second.`);
+
+    //Wait for a little over 1 second and make sure the timers properly updated
+    await sleep(1100);
+    await act(async () => {annyang.trigger(`how much time left on ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" has 1 minute, 29 seconds remaining.`);
+    
+    await act(async () => {annyang.trigger(`how much time left on ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName2}" has 1 minute, 29 seconds remaining.`);
+    
+    await act(async () => {annyang.trigger(`how much time left on ${timerName3}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName3}" has 1 minute, 29 seconds remaining.`);
+    
+    await act(async () => {annyang.trigger(`how much time left on ${timerName4}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName4}" has 1 minute, 29 seconds remaining.`);
+    
+    await act(async () => {annyang.trigger(`how much time left on ${timerName5}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName5}" has 1 minute, 29 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName6}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName6}" has 1 hour remaining.`);
+
+    //Wait for a little over another second and make sure the timer properly updated again
+    await sleep(1100);
+    await act(async () => {annyang.trigger(`how much time left on ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" has 1 minute, 28 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName2}" has 1 minute, 28 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName3}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName3}" has 1 minute, 28 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName4}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName4}" has 1 minute, 28 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName5}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName5}" has 1 minute, 28 seconds remaining.`);
+
+    await act(async () => {annyang.trigger(`how much time left on ${timerName6}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName6}" has 59 minutes, 59 seconds remaining.`);
+});
+
+test('pausing timer', async () =>
+{
+    FillRecipe1();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Start a 5 second timer
+    let timerName2 = "test 2 seconds";
+    await act(async () => {annyang.trigger(`start set a timer for 2 seconds named called ${timerName2}`)});
+
+    //Start a 1 minute timer
+    let timerName1 = "test one minute";
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute named called ${timerName1}`)});
+
+    //Make sure a non-existent timer can't be pause
+    await act(async () => {annyang.trigger(`pause timer named called fake`)});
+    expect(log).toHaveBeenLastCalledWith(`No timer with the name "fake" was found.`);
+
+    //Wait a little and pause the timer
+    await sleep(250);
+    await act(async () => {annyang.trigger(`pause timer named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" was paused with 1 minute remaining.`);
+
+    //Make sure the timer can't be paused again
+    await act(async () => {annyang.trigger(`pause timer named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" is already paused at 1 minute remaining.`);
+
+    //Make sure a non-existent timer can't be unpaused
+    await act(async () => {annyang.trigger(`continue timer named called fake`)});
+    expect(log).toHaveBeenLastCalledWith(`No timer with the name "fake" was found.`);
+
+    //Check error message when trying to start a timer with the same name as a paused timer
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`There is already a timer for "${timerName1}" paused at 1 minute remaining.`);
+
+    //Wait a second and unpause the timer
+    await sleep(1000);
+    await act(async () => {annyang.trigger(`continue timer named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" was resumed with 1 minute remaining.`);
+
+    //Make sure the timer can't be unpaused again
+    await act(async () => {annyang.trigger(`resume timer named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" is already running with 1 minute remaining.`);
+
+    //Wait a second and make sure the time was updated correctly
+    await sleep(1000);
+    await act(async () => {annyang.trigger(`how much time left on ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" has 59 seconds remaining.`);
+
+    //Check to make sure the pausing had no effect on the other timer set
+    await act(async () => {annyang.trigger(`how much time left on ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName2}" finished already.`);
+
+    //Try pausing and resuming a finished timer
+    await act(async () => {annyang.trigger(`pause timer named called ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName2}" finished already.`);
+
+    await act(async () => {annyang.trigger(`resume timer named called ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName2}" finished already.`);
+
+    //Pause the timer again
+    await act(async () => {annyang.trigger(`pause timer named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" was paused with 59 seconds remaining.`);
+
+    //Wait a second and unpause the timer
+    await sleep(1000);
+    await act(async () => {annyang.trigger(`continue timer named called ${timerName1}`)});
+
+    //Wait a second and make sure the pause times were calculated correctly
+    await sleep(1000);
+    await act(async () => {annyang.trigger(`how much time left on ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" has 58 seconds remaining.`);
+});
+
+test('stop timer', async () =>
+{
+    let timerName1 = "test timer 1";
+    let timerName2 = "test timer 2";
+
+    FillRecipe1();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Start test timer 1
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute named called ${timerName1}`)});
+
+    //Make sure a non-existent timer can't be stopped
+    await act(async () => {annyang.trigger(`stop timer named called fake`)});
+    expect(log).toHaveBeenLastCalledWith(`No timer with the name "fake" was found.`);
+
+    //Stop the timer
+    await act(async () => {annyang.trigger(`stop timer named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" was removed.`);
+
+    //Make sure the timer can't be stopped again
+    await act(async () => {annyang.trigger(`stop timer named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`No timer with the name "${timerName1}" was found.`);
+
+    //Start the timer again alongside a second timer
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute named called ${timerName1}`)});
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute named called ${timerName2}`)});
+
+    //Make sure a non-existent timer can't be cancelled
+    await act(async () => {annyang.trigger(`cancel timer named called fake`)});
+    expect(log).toHaveBeenLastCalledWith(`No timer with the name "fake" was found.`);
+
+    //Cancel the timer
+    await act(async () => {annyang.trigger(`cancel timer named called ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName2}" was removed.`);
+
+    //List remaining timers and make sure only timer 1 is left
+    await act(async () => {annyang.trigger(`read timers`)});
+    expect(log).toHaveBeenLastCalledWith(`0. The timer for "${timerName1}" has 1 minute remaining.`);
+
+    //Start timer 2 again
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute named called ${timerName2}`)});
+
+    //Stop all timers
+    await act(async () => {annyang.trigger(`stop all timers`)});
+    expect(log).toHaveBeenLastCalledWith(`All timers were removed.`);
+
+    //Try stopping all timers when none are active
+    await act(async () => {annyang.trigger(`cancel all timers`)});
+    expect(log).toHaveBeenLastCalledWith(`No timers are currently active.`);
+
+    //Read all timers and make sure none are left
+    await act(async () => {annyang.trigger(`read timers`)});
+    expect(log).toHaveBeenLastCalledWith(`No timers are currently active.`);
+});
+
+test('reading all timers single timer', async () =>
+{
+    let timerName1 = "test timer 1";
+
+    FillRecipe1();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Read specific timer with fake name
+    await act(async () => {annyang.trigger(`how much time left on fake`)});
+    expect(log).toHaveBeenLastCalledWith(`No timer with the name "fake" was found.`);
+
+    //Read timers when none are active
+    await act(async () => {annyang.trigger(`read timers`)});
+    expect(log).toHaveBeenLastCalledWith(`No timers are currently active.`);
+
+    //Start test timer 1
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute named called ${timerName1}`)});
+    
+    //Read all timers
+    await act(async () => {annyang.trigger(`read timers`)});
+    expect(log).toHaveBeenLastCalledWith(`0. The timer for "${timerName1}" has 1 minute remaining.`);
+});
+
+test('reading all timers two timers', async () =>
+{
+    let timerName1 = "test timer 1";
+    let timerName2 = "test timer 2";
+
+    FillRecipe1();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Start test timers
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute named called ${timerName1}`)});
+    await act(async () => {annyang.trigger(`start set a timer for 2 seconds named called ${timerName2}`)});
+
+    //Read all timers (should be sorted in order from closest to finishing to furthest)
+    await act(async () => {annyang.trigger(`read timers`)});
+    expect(log).toHaveBeenCalledWith(`0. The timer for "${timerName2}" has 2 seconds remaining.`);
+    expect(log).toHaveBeenLastCalledWith(`1. The timer for "${timerName1}" has 1 minute remaining.`);
+
+    //Wait 2 seconds
+    await sleep(2200);
+
+    //Read all timers (finished timers should be sorted to the end)
+    await act(async () => {annyang.trigger(`read timers`)});
+    expect(log).toHaveBeenLastCalledWith(`1. The timer for "${timerName2}" finished already.`);
+});
+
+test('reading all timers multiple timers', async () =>
+{
+    let timerName1 = "test timer 1";
+    let timerName2 = "test timer 2";
+    let timerName3 = "b test timer 3";
+    let timerName4 = "a test timer 4";
+
+    FillRecipe1();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Start test timers
+    await act(async () => {annyang.trigger(`start set a timer for 1 hour named called ${timerName1}`)});
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute named called ${timerName2}`)});
+    await act(async () => {annyang.trigger(`start set a timer for 2 seconds named called ${timerName3}`)});
+    await act(async () => {annyang.trigger(`start set a timer for 1 second named called ${timerName4}`)});
+    
+    //Read all timers (should be sorted in order from closest to finishing to furthest)
+    await act(async () => {annyang.trigger(`read timers`)});
+    expect(log).toHaveBeenCalledWith(`0. The timer for "${timerName4}" has 1 second remaining.`);
+    expect(log).toHaveBeenCalledWith(`1. The timer for "${timerName3}" has 2 seconds remaining.`);
+    expect(log).toHaveBeenCalledWith(`2. The timer for "${timerName2}" has 1 minute remaining.`);
+    expect(log).toHaveBeenLastCalledWith(`3. The timer for "${timerName1}" has 1 hour remaining.`);
+
+    //Wait 1 second
+    await sleep(1100);
+
+    //Read all timers (should be sorted in order from closest to finishing to furthest)
+    await act(async () => {annyang.trigger(`read timers`)});
+    expect(log).toHaveBeenCalledWith(`0. The timer for "${timerName3}" has 1 second remaining.`);
+    expect(log).toHaveBeenCalledWith(`1. The timer for "${timerName2}" has 59 seconds remaining.`);
+    expect(log).toHaveBeenCalledWith(`2. The timer for "${timerName1}" has 59 minutes, 59 seconds remaining.`);
+    expect(log).toHaveBeenLastCalledWith(`3. The timer for "${timerName4}" finished already.`);
+
+    //Wait 1 second
+    await sleep(1100);
+
+    //Read all timers (the finished timers should be sorted in alphabetical order)
+    await act(async () => {annyang.trigger(`read timers`)});
+    expect(log).toHaveBeenCalledWith(`0. The timer for "${timerName2}" has 58 seconds remaining.`);
+    expect(log).toHaveBeenCalledWith(`1. The timer for "${timerName1}" has 59 minutes, 58 seconds remaining.`);
+    expect(log).toHaveBeenCalledWith(`2. The timer for "${timerName4}" finished already.`);
+    expect(log).toHaveBeenLastCalledWith(`3. The timer for "${timerName3}" finished already.`);
+});
+
+test('restarting timers', async () =>
+{
+    let timerName1 = "test timer 1";
+    let timerName2 = "test timer 2";
+
+    FillRecipe1();
+
+    //Click the start button
+    await act(async () => {fireEvent.click(startReadingButton)});
+
+    //Try restarting non-existent timer
+    await act(async () => {annyang.trigger(`restart timer named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`No timer with the name "${timerName1}" was found.`);
+
+    //Start test timers
+    await act(async () => {annyang.trigger(`start set a timer for 1 minute named called ${timerName1}`)});
+    await act(async () => {annyang.trigger(`start set a timer for 1 second named called ${timerName2}`)});
+
+    //Wait 1 seconds
+    await sleep(1100);
+
+    //Restart the finished timer
+    await act(async () => {annyang.trigger(`restart timer named called ${timerName2}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName2}" was restarted to 1 second remaining.`);
+
+    //Restart the unfinished timer
+    await act(async () => {annyang.trigger(`restart timer named called ${timerName1}`)});
+    expect(log).toHaveBeenLastCalledWith(`The timer for "${timerName1}" was restarted to 1 minute remaining.`);
+
+    //Wait 1 second
+    await sleep(1100);
+
+    //Read all timers (finished timers should be sorted to the end)
+    await act(async () => {annyang.trigger(`read timers`)});
+    expect(log).toHaveBeenCalledWith(`0. The timer for "${timerName1}" has 59 seconds remaining.`);
+    expect(log).toHaveBeenLastCalledWith(`1. The timer for "${timerName2}" finished already.`);
 });

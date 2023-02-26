@@ -1,5 +1,5 @@
 import React, {Component} from 'react';
-import {Form, FormControl, Dropdown} from 'react-bootstrap';
+import {Button, Form, FormControl, Dropdown} from 'react-bootstrap';
 import annyang from 'annyang';
 import numerizer from 'numerizer';
 import TextareaAutosize from 'react-textarea-autosize';
@@ -9,6 +9,7 @@ import withReactContent from 'sweetalert2-react-content';
 import {GrTrash} from "react-icons/gr";
 
 import VoiceNames from "./data/Voices"
+import SfxTimerDone from './audio/TimerDone.mp3';
 
 import './stylesheets/Recipe.css';
 
@@ -17,6 +18,7 @@ const sleep = ms => new Promise(
 );
 
 const PopUp = withReactContent(Swal);
+const timerDoneSound = new Audio(SfxTimerDone);
 
 const READING_INGREDIENTS = 0;
 const READING_INSTRUCTIONS = 1;
@@ -44,11 +46,11 @@ const SECTION_REGEX = /{.*}/g;
 const WAITING_FOR_NEXT_LIMIT = 3 * 60 * 1000; //Wait three minutes before saying "continuing step X" after hearing a "next" when waiting for nex
 
 //UI TODO//
-//TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account.
-//TODO: Command list help button
+//TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account. Saying "list recipes" says the names of all recipes being cooked.
+//TODO: Command list help button (and be able to say "help" also)
+//TODO: Should be able to rename timers on the UI
 
 //Backend TODO//
-//TODO: Timer functionality ("set a timer for X", "(how much) time (is left) on the timer", "stop timer"). Should be able to set multiple and give each a name (and ofc recipe title should be factored in).
 //TODO: Should be able to add together common ingredients across multiple recipes for a "total amount needed request"
 
 
@@ -75,6 +77,7 @@ class Recipe extends Component
             ingredientsInput: "",
             instructionsInput: "",
             recipes: this.getInitialRecipes(),
+            timers: {},
             currentRecipe: -1,
             savedChanges: true,
             debugLog: true,
@@ -89,16 +92,21 @@ class Recipe extends Component
             voiceId: voiceId,
             speakingId: 0,
         };
+
+        this.countDown = this.countDown.bind(this);
     }
 
     componentDidMount()
     {
         window.addEventListener('beforeunload', this.tryPreventLeavingPage.bind(this));
+        this.timer = setInterval(this.countDown, 100); //Check every 1/10 second if timers need updating
     }
 
     componentWillUnmount()
     {
         window.removeEventListener('beforeunload', this.tryPreventLeavingPage.bind(this));
+        if (this.timer != null)
+            clearInterval(this.timer);
     }
 
     async setStateAndWait(newState)
@@ -557,6 +565,46 @@ class Recipe extends Component
                     "disable(d)": this.disableAnnyang.bind(this),
                     "repeat":  this.repeatLastSpoken.bind(this),
 
+                    //Timer querires
+                    "(start) (set) (a) timer for :hours hour(s) (and) :minutes minute(s) (named) (called) *timerName":        (hours, minutes, timerName) => this.setTimer(hours, minutes, 0, timerName),
+                    "(start) (set) (a) timer (named) (called) :timerName for :hours hour(s) (and) :minutes minute(s)":        (hours, minutes, timerName) => this.setTimer(hours, minutes, 0, timerName),
+                    "(start) (set) (a) timer for an hour and a half (named) (called) *timerName":                                             (timerName) => this.setTimer(1, 30, 0, timerName), 
+                    "(start) (set) (a) timer (named) (called) :timerName for an hour and a half":                                             (timerName) => this.setTimer(1, 30, 0, timerName), 
+                    "(start) (set) (a) timer for :hours hour(s) and a half (named) (called) *timerName":                               (hours, timerName) => this.setTimer(hours, 30, 0, timerName), 
+                    "(start) (set) (a) timer (named) (called) :timerName for :hours hour(s) and a half":                               (hours, timerName) => this.setTimer(hours, 30, 0, timerName), 
+                    "(start) (set) (a) timer for :hours and a half hour(s) (named) (called) *timerName":                               (hours, timerName) => this.setTimer(hours, 30, 0, timerName),
+                    "(start) (set) (a) timer (named) (called) :timerName for :hours and a half hour(s)":                               (hours, timerName) => this.setTimer(hours, 30, 0, timerName),
+                    "(start) (set) (a) timer for :hours and 1/2 hour(s) (named) (called) *timerName":                                  (hours, timerName) => this.setTimer(hours, 30, 0, timerName),
+                    "(start) (set) (a) timer (named) (called) :timerName for :hours and 1/2 hour(s)":                                  (hours, timerName) => this.setTimer(hours, 30, 0, timerName),
+                    "(start) (set) (a) timer for :minutes minute(s) (and) :seconds second(s) (named) (called) *timerName": (minutes, seconds, timerName) => this.setTimer(0, minutes, seconds, timerName),
+                    "(start) (set) (a) timer (named) (called) :timerName for :minutes minute(s) (and) :seconds second(s)": (minutes, seconds, timerName) => this.setTimer(0, minutes, seconds, timerName),
+                    "(start) (set) (a) timer for a minute and a half (named) (called) *timerName":                                            (timerName) => this.setTimer(0, 1, 30, timerName), 
+                    "(start) (set) (a) timer (named) (called) :timerName for a minute and a half":                                            (timerName) => this.setTimer(0, 1, 30, timerName), 
+                    "(start) (set) (a) timer for :minutes minute(s) and a half (named) (called) *timerName":                         (minutes, timerName) => this.setTimer(0, minutes, 30, timerName), 
+                    "(start) (set) (a) timer (named) (called) :timerName for :minutes minute(s) and a half":                         (minutes, timerName) => this.setTimer(0, minutes, 30, timerName), 
+                    "(start) (set) (a) timer for :minutes and a half minute(s) (named) (called) *timerName":                        (minutes, timerName) => this.setTimer(0, minutes, 30, timerName),
+                    "(start) (set) (a) timer (named) (called) :timerName for :minutes and a half minute(s)":                        (minutes, timerName) => this.setTimer(0, minutes, 30, timerName),
+                    "(start) (set) (a) timer for :minutes and 1/2 minute(s) (named) (called) *timerName":                           (minutes, timerName) => this.setTimer(0, minutes, 30, timerName),
+                    "(start) (set) (a) timer (named) (called) :timerName for :minutes and 1/2 minute(s)":                           (minutes, timerName) => this.setTimer(0, minutes, 30, timerName),
+                    "(start) (set) (a) timer for :hours hour(s) (named) (called) *timerName":                                          (hours, timerName) => this.setTimer(hours, 0, 0, timerName),
+                    "(start) (set) (a) timer (named) (called) :timerName for :hours hour(s)":                                          (hours, timerName) => this.setTimer(hours, 0, 0, timerName),
+                    "(start) (set) (a) timer for :minutes minute(s) (named) (called) *timerName":                                    (minutes, timerName) => this.setTimer(0, minutes, 0, timerName),
+                    "(start) (set) (a) timer (named) (called) :timerName for :minutes minute(s)":                                    (minutes, timerName) => this.setTimer(0, minutes, 0, timerName),
+                    "(start) (set) (a) timer for :seconds second(s) (named) (called) *timerName":                                    (seconds, timerName) => this.setTimer(0, 0, seconds, timerName),
+                    "(start) (set) (a) timer (named) (called) :timerName for :seconds second(s)":                                    (seconds, timerName) => this.setTimer(0, 0, seconds, timerName),
+                    "pause timer (named) (called) *timerName":    (timerName) => this.pauseTimer(timerName),
+                    "resume timer (named) (called) *timerName":   (timerName) => this.resumeTimer(timerName),
+                    "continue timer (named) (called) *timerName": (timerName) => this.resumeTimer(timerName),
+                    "stop timer (named) (called) *timerName":     (timerName) => this.stopTimer(timerName),
+                    "cancel timer (named) (called) *timerName":   (timerName) => this.stopTimer(timerName),
+                    "delete timer (named) (called) *timerName":   (timerName) => this.stopTimer(timerName),
+                    "remove timer (named) (called) *timerName":   (timerName) => this.stopTimer(timerName),
+                    "stop all timers":                                           this.stopAllTimers.bind(this),
+                    "cancel all timers":                                         this.stopAllTimers.bind(this),
+                    "restart timer (named) (called) *timerName":  (timerName) => this.restartTimer(timerName),
+                    "how much time (left) on *timerName":         (timerName) => this.sayTimeRemaining(timerName),
+                    "(read) timers":                                             this.readAllTimers.bind(this),
+
                     //Ingredients Commands
                     "continue (reading) ingredient(s)":     this.readIngredients.bind(this),
                     "(read) (list) ingredient(s)":          this.readIngredientListFromScratch.bind(this),
@@ -582,10 +630,10 @@ class Recipe extends Component
                     "current step":       this.whichStepIsCurrent.bind(this),
  
                     //Recipe Queries
-                    "which recipe (am i cooking)":    this.sayCurrentRecipe.bind(this), //NEED TESTING//
-                    "what's cooking":                 this.sayCurrentRecipe.bind(this), //NEED TESTING//
-                    "current recipe":                 this.sayCurrentRecipe.bind(this), //NEED TESTING//
-                    "switch to *recipe":  (recipe) => this.findAndSwitchToRecipe(recipe), //NEED TESTING//
+                    "which recipe (am i cooking)":    this.sayCurrentRecipe.bind(this),
+                    "what's cooking":                 this.sayCurrentRecipe.bind(this),
+                    "current recipe":                 this.sayCurrentRecipe.bind(this),
+                    "switch to *recipe":  (recipe) => this.findAndSwitchToRecipe(recipe),
 
                     //Placed down here to give priority matching to commands above
                     "(okay) continue":                this.processSayingNext.bind(this),
@@ -1088,7 +1136,6 @@ class Recipe extends Component
             this.sayText("Enter instructions first.");
         else
         {
-            this.updateCurrentRecipe
             await this.updateCurrentRecipeAndWait
             ({
                 readingState: READING_INSTRUCTIONS,
@@ -1425,6 +1472,376 @@ class Recipe extends Component
     }
 
 
+    //Timer Commands//
+    async countDown()
+    {
+        const currTimestamp = Date.now();
+        var timers = this.state.timers;
+
+        for (const timerName of Object.keys(this.state.timers))
+        {
+            let timer = timers[timerName];
+            if (!timer.active) continue;
+
+            let newHours, newMinutes, newSeconds;
+            let timerLength = (timer.initialHours * (60 * 60) + timer.initialMinutes * 60 + timer.initialSeconds) * 1000;
+            let timeDiff = (currTimestamp - timer.startingTimestamp) - timer.totalPaused;
+            let timeRemaining = timerLength - timeDiff;
+
+            if (timeRemaining <= 0)
+            {
+                newHours = 0;
+                newMinutes = 0;
+                newSeconds = 0;
+
+                timer.active = false
+                if (!IS_TEST_ENVIRONMENT)
+                    timerDoneSound.play();
+                this.sayText(`The timer for "${timerName}" is done.`);
+            }
+            else
+            {
+                newSeconds = Math.ceil(timeRemaining / 1000);
+                newMinutes = Math.floor(newSeconds / 60);
+                newHours = Math.floor(newMinutes / 60);
+                newSeconds %= 60;
+                newMinutes %= 60;
+            }
+
+            timer = {...timer, hours: newHours, minutes: newMinutes, seconds: newSeconds};
+            timers[timerName] = timer;
+        }
+
+        await this.setStateAndWait({timers: timers});
+    }
+
+    setTimer(hours, minutes, seconds, timerName)
+    {
+        var timer;
+        var timers = this.state.timers;
+
+        if (timerName === null || timerName.length === 0)
+            timerName = `Timer ${Object.keys(timers).length + 1}`; //Assign a default name
+
+        //Check if timer already exists
+        if (timerName in timers)
+        {
+            timer = timers[timerName];
+
+            if (timer.active)
+            {
+                this.sayText(`There is already an active timer for "${timerName}".`);
+                return;
+            }
+            else if (timer.hours !== 0 || timer.minutes !== 0 || timer.seconds !== 0)
+            {
+                this.sayText(`There is already a timer for "${timerName}" paused at ${this.getCurrentTimerTimeText(timerName)} remaining.`);
+                return;
+            }
+        }
+
+        //Process the number of hours to set
+        if (hours)
+        {
+            let originalHours = hours;
+            hours = ParseTimerNumber(hours);
+
+            if (IsNotValidTimerHour(hours))
+            {
+                this.sayText(`${originalHours} is not a valid hour to set for the timer. It must be greater than 0 and up to 24.`);
+                return;
+            }
+        }
+
+        //Process the number of minutes to set
+        if (minutes)
+        {
+            let originalMinutes = minutes;
+            minutes = ParseTimerNumber(minutes);
+
+            //If hours is null, convert minutes over 60 to hours
+            if (!isNaN(minutes) && !hours)
+            {
+                hours = Math.floor(minutes / 60);
+                minutes %= 60;
+            }
+
+            if (IsNotValidTimerMinute(minutes))
+            {
+                this.sayText(`${originalMinutes} is not a valid minute to set for the timer. It must be greater than 0 and up to 59.`);
+                return;
+            }
+        }
+
+        //Process the number of seconds to set
+        if (seconds)
+        {
+            let originalSeconds = seconds;
+            seconds = ParseTimerNumber(seconds);
+
+            //If hours and minutes is null, convert seconds over 60 to minutes
+            if (!isNaN(seconds) && !hours && !minutes)
+            {
+                minutes = Math.floor(seconds / 60);
+                seconds %= 60;
+                hours = Math.floor(minutes / 60);
+                minutes %= 60;
+            }
+
+            console.log(seconds, isNaN(seconds), seconds > 59, seconds <= 0)
+            if (IsNotValidTimerSecond(seconds))
+            {
+                this.sayText(`${originalSeconds} is not a valid second to set for the timer. It must be greater than 0 and up to 59.`);
+                return;
+            }
+        }
+
+        //Start the timer
+        timer =
+        {
+            name: timerName,
+            hours: hours ? hours : 0,
+            minutes: minutes ? minutes : 0,
+            seconds: seconds ? seconds : 0,
+            initialHours: hours ? hours : 0,
+            initialMinutes: minutes ? minutes : 0,
+            initialSeconds: seconds ? seconds : 0,
+            startingTimestamp: Date.now(),
+            pauseStart: 0,
+            totalPaused: 0,
+            active: true,
+        }
+        timers[timerName.toLowerCase()] = timer;
+        this.setState({timers: timers});
+        this.sayText(`Started a timer called "${timerName}" lasting ${this.getCurrentTimerTimeText(timerName)}.`);
+    }
+
+    getCurrentTimerTimeText(timerName)
+    {
+        var text = "";
+        var timers = this.state.timers;
+        timerName = timerName.toLowerCase();
+
+        if (timerName in timers)
+        {
+            var hours = timers[timerName].hours;
+            var minutes = timers[timerName].minutes;
+            var seconds = timers[timerName].seconds;
+
+            if (hours === 0 && minutes === 0 && seconds === 0)
+                text = "";
+            else
+            {
+                let hoursText =   hours === 0 ? ""   : (`${hours} hour` + (hours !== 1 ? "s" : "") + ((minutes > 0 || seconds > 0) ? ", " : ""));
+                let minutesText = minutes === 0 ? "" : (`${minutes} minute` + (minutes !== 1 ? "s" : "") + (seconds > 0 ? ", " : ""));
+                let secondsText = seconds === 0 ? "" : (`${seconds} second` + (seconds !== 1 ? "s" : ""));
+                text = `${hoursText}${minutesText}${secondsText}`;
+            }
+        }
+
+        return text;
+    }
+
+    determineTimerSortValue(timerName)
+    {
+        var timer = this.state.timers[timerName];
+        return timer.seconds + timer.minutes * 60 + timer.hours * 60 * 60;
+    }
+
+    compareTimers(timer1, timer2)
+    {
+        var sortValue1 = this.determineTimerSortValue(timer1);
+        var sortValue2 = this.determineTimerSortValue(timer2);
+
+        //Stick done timers at the end in alphabetical order
+        if (sortValue1 === 0 && sortValue2 !== 0)
+            return 1;
+        else if (sortValue1 !== 0 && sortValue2 === 0)
+            return -1;
+        else if (sortValue1 === 0 && sortValue2 === 0)
+            return ('' + timer1.toLowerCase()).localeCompare(timer2.toLowerCase());
+
+        //Determine value of two active timers
+        return sortValue1 - sortValue2;
+    }
+
+    getSortedTimerNameList()
+    {
+        return Object.keys(this.state.timers).sort(this.compareTimers.bind(this));
+    }
+
+    atLeastOneTimerIsActive()
+    {
+        var timers = this.state.timers;
+
+        for (let timerName of this.getSortedTimerNameList())
+        {
+            let timer = timers[timerName];
+            if (timer.hours !== 0 || timer.minutes !== 0 || timer.seconds !== 0)
+                return true;
+        }
+
+        return false;
+    }
+
+    pauseTimer(timerName)
+    {
+        var timers = this.state.timers;
+        timerName = timerName.toLowerCase();
+
+        if (timerName in timers)
+        {
+            var timer = timers[timerName];
+
+            if (timer.hours === 0 && timer.minutes === 0 && timer.seconds === 0)
+                this.sayText(`The timer for "${timerName}" finished already.`);
+            else if (!timer.active)
+                this.sayText(`The timer for "${timerName}" is already paused at ${this.getCurrentTimerTimeText(timerName)} remaining.`);
+            else
+            {
+                timer.active = false; //Deactivate until it's started again
+                timer.pauseStart = Date.now(); //Time will be used to calculate timer time when started again
+                timers[timerName] = timer;
+                this.setState({timers: timers});
+                this.sayText(`The timer for "${timerName}" was paused with ${this.getCurrentTimerTimeText(timerName)} remaining.`);
+            }
+        }
+        else
+            this.sayText(`No timer with the name "${timerName}" was found.`);
+    }
+
+    resumeTimer(timerName)
+    {
+        var timers = this.state.timers;
+        timerName = timerName.toLowerCase();
+
+        if (timerName in timers)
+        {
+            var timer = timers[timerName];
+
+            if (timer.hours === 0 && timer.minutes === 0 && timer.seconds === 0)
+                this.sayText(`The timer for "${timerName}" finished already.`);
+            else if (timer.active)
+                this.sayText(`The timer for "${timerName}" is already running with ${this.getCurrentTimerTimeText(timerName)} remaining.`);
+            else
+            {
+                timer.active = true;
+                timer.totalPaused += (Date.now() - timer.pauseStart); //Add to total time paused
+                timers[timerName] = timer;
+                this.setState({timers: timers});
+                this.sayText(`The timer for "${timerName}" was resumed with ${this.getCurrentTimerTimeText(timerName)} remaining.`);
+            }
+        }
+        else
+            this.sayText(`No timer with the name "${timerName}" was found.`);
+    }
+
+    stopTimer(timerName)
+    {
+        var timers = this.state.timers;
+        timerName = timerName.toLowerCase();
+
+        if (timerName in timers)
+        {
+            var timer = timers[timerName];
+
+            if (timer.hours === 0 && timer.minutes === 0 && timer.seconds === 0)
+                this.sayText(`The timer for "${timerName}" is already finished.`);
+            else
+            {
+                //Actually remove the timer from the list, don't just deactivate it
+                delete timers[timerName];
+                this.setState({timers: timers});
+                this.sayText(`The timer for "${timerName}" was removed.`);
+            }
+        }
+        else
+            this.sayText(`No timer with the name "${timerName}" was found.`);
+    }
+
+    stopAllTimers()
+    {
+        if (!this.atLeastOneTimerIsActive())
+            this.sayText("No timers are currently active.");
+        else
+        {
+            this.setState({timers: {}});
+            this.sayText("All timers were removed.");
+        }
+    }
+
+    restartTimer(timerName)
+    {
+        var timers = this.state.timers;
+        timerName = timerName.toLowerCase();
+
+        if (timerName in timers)
+        {
+            var timer = timers[timerName];
+            timer.active = true;
+            timer.startingTimestamp = Date.now();
+            timer.totalPaused = 0;
+            timer.hours = timer.initialHours;
+            timer.minutes = timer.initialMinutes;
+            timer.seconds = timer.initialSeconds;
+            this.setState({timers: timers});
+            this.sayText(`The timer for "${timerName}" was restarted to ${this.getCurrentTimerTimeText(timerName)} remaining.`);
+        }
+        else
+            this.sayText(`No timer with the name "${timerName}" was found.`);
+    }
+
+    sayTimeRemaining(timerName, timerNum=-1)
+    {
+        timerName = timerName.toLowerCase();
+
+        if (timerName in this.state.timers)
+        {
+            let textToSay;
+            let remainingTime = this.getCurrentTimerTimeText(timerName);
+
+            if (remainingTime.length === 0)
+                textToSay = `The timer for "${timerName}" finished already.`;
+            else
+                textToSay = `The timer for "${timerName}" has ${this.getCurrentTimerTimeText(timerName)} remaining.`;
+
+            if (IS_TEST_ENVIRONMENT && timerNum !== -1) //Add timer number to text if in test environment
+                textToSay = `${timerNum}. ${textToSay}`;
+
+            this.sayText(textToSay);
+        }
+        else
+            this.sayText(`No timer with the name "${timerName}" was found.`);
+    }
+
+    readAllTimers()
+    {
+        if (!this.atLeastOneTimerIsActive())
+            this.sayText("No timers are currently active.");
+        else
+        {
+            var timerNum = 0;
+            for (let timerName of this.getSortedTimerNameList())
+            {
+                this.sayTimeRemaining(timerName, timerNum);
+                timerNum++;
+            }
+        }
+    }
+
+    startTimerInstructionsPopUp()
+    {
+        PopUp.fire(
+        {
+            title: `Start one by saying something like:\nStart a timer for 1 hour called "chicken"`,
+            cancelButtonText: `Okay`,
+            showConfirmButton: false,
+            showCancelButton: true,
+            //scrollbarPadding: false,
+        });
+    }
+
+
     //GUI Util//
 
     navBar()
@@ -1432,6 +1849,7 @@ class Recipe extends Component
         return (
             <div className="nav-bar">
                 {this.voiceListDropdown()}
+                {this.timerListDropdown()}
             </div>
         );
     }
@@ -1472,6 +1890,60 @@ class Recipe extends Component
 
                 <Dropdown.Menu>
                     {dropdownItems}
+                </Dropdown.Menu>
+            </Dropdown>
+        );
+    }
+
+    timerListDropdown()
+    {
+        var dropdownTimers = [];
+        var numActiveTimers = 0;
+        var timerDetails = "";
+
+        for (let timerName of this.getSortedTimerNameList())
+        {
+            let timer = this.state.timers[timerName];
+            timerName = timer.name;
+
+            if (timer.active)
+                ++numActiveTimers;
+
+            timerDetails = `${timerName} - ${timer.hours.toString().padStart(2, "0")}:${timer.minutes.toString().padStart(2, "0")}:${timer.seconds.toString().padStart(2, "0")}`;
+            dropdownTimers.push(
+                <Dropdown.Item key={timerName}>
+                    {timerDetails}
+                </Dropdown.Item>
+            )
+        }
+
+        if (dropdownTimers.length === 0)
+        {
+            return (
+                <Dropdown className="timer-list">
+                    <Button variant="success" id="dropdown-basic" className="timer-list-button"
+                        onClick={this.startTimerInstructionsPopUp.bind(this)}>
+                        No Active Timers
+                    </Button>
+                </Dropdown>
+            );
+        }
+
+        return (
+            <Dropdown className="timer-list">
+                <Dropdown.Toggle variant="success" id="dropdown-basic" className="timer-list-button">
+                {
+                    numActiveTimers === 0 ?
+                        "No Active Timers"
+                    : numActiveTimers === 1 ? //Just show the one timer
+                        timerDetails
+                    :
+                        `${numActiveTimers} Active Timer` + (numActiveTimers !== 1 ? "s" : "")
+                }
+                </Dropdown.Toggle>
+
+                <Dropdown.Menu>
+                    {dropdownTimers}
                 </Dropdown.Menu>
             </Dropdown>
         );
@@ -1551,6 +2023,7 @@ class Recipe extends Component
                     <div className="recipe-buttons">
                         <button onClick={this.saveRecipe.bind(this)}>Save Recipe</button>
                         <button onClick={this.startListeningAndReading.bind(this)}>Save & Start Cooking</button>
+                        <button onClick={this.setTimer.bind(this, 0, 0, 10, "Test")}>Test Timer</button>
                     </div>
                 </div>
             </div>
@@ -1575,6 +2048,31 @@ function ParseStepNumber(step)
         i = parseInt(numerizer(step)) - 1; //Try to convert it from text like "one"
 
     return i;
+}
+
+function ParseTimerNumber(num)
+{
+    let i = parseInt(num);
+
+    if (isNaN(i))
+        i = parseInt(numerizer(num)); //Try to convert it from text like "one"
+
+    return i;
+}
+
+function IsNotValidTimerHour(hour)
+{
+    return isNaN(hour) || hour > 24 || hour <= 0;
+}
+
+function IsNotValidTimerMinute(minute)
+{
+    return isNaN(minute) || minute > 59 || minute <= 0;
+}
+
+function IsNotValidTimerSecond(second)
+{
+    return isNaN(second) || second > 59 || second <= 0;
 }
 
 function ErrorPopUp(errorMsg)
