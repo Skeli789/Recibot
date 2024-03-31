@@ -221,7 +221,7 @@ export const TEST_INSTRUCTIONS_5 =
 3. Heat a pan or wok over medium-high heat, and add the <oil>. When hot, add the tofu and toss to crisp up on all sides until the tofu is cooked and crisped on all sides, about 5 to 8 minutes. Remove tofu pieces and set aside.
 4. In the same pan, lower the heat to over medium-high heat, and add in the <onions>, <pineapples> and <bell peppers>.
 5. Saute until the onions are translucent and the pineapples are slightly browned, about 5 minutes.
-6. In a separate bowl, whisk together the <sugar>, <ketchup>, <vinegar>, <water>, <soy sauce [sauce]>, and <garlic powder [sauce]> for the sweet and sour sauce and stir together until fully combined.
+6. In a separate bowl, whisk together the <sugar>, <ketchup>, <vinegar>, <water>, <soy sauce [2]>, and <garlic powder [sauce]> for the sweet and sour sauce and stir together until fully combined.
 7. Pour in the sauce over the veggies. Bring to a slight boil, then reduce to a simmer for about 5 minutes until the sauce has thickened up. 
 8. Add back in the crisped up tofu, and stir to combine. Taste test and add more sugar or soy sauce if you desire. Remove from heat and top with <sesame seeds>. Serve and enjoy!`;
 

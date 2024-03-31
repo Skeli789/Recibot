@@ -3,21 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@testing-library/jest-dom": "^5.16.5",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^14.4.3",
     "annyang": "^2.6.1",
-    "bootstrap": "^5.2.3",
+    "bootstrap": "^5.3.3",
     "numerizer": "^0.0.4",
     "react": "^18.2.0",
-    "react-bootstrap": "^2.7.0",
-    "react-device-detect": "^2.2.2",
+    "react-bootstrap": "^2.10.2",
+    "react-device-detect": "^2.2.3",
     "react-dom": "^18.2.0",
-    "react-icons": "^4.7.1",
+    "react-icons": "^5.0.1",
     "react-scripts": "^5.0.1",
-    "react-textarea-autosize": "^8.4.0",
-    "sweetalert2": "^11.7.1",
+    "react-textarea-autosize": "^8.5.3",
+    "sweetalert2": "^11.10.7",
     "sweetalert2-react-content": "^5.0.7"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/react": "^14.2.2",
+    "@testing-library/user-event": "^14.5.2",
+    "nyc": "^15.1.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -39,8 +42,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "devDependencies": {
-    "nyc": "^15.1.0"
   }
 }

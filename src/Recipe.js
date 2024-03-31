@@ -49,10 +49,11 @@ const WAITING_FOR_NEXT_LIMIT = 3 * 60 * 1000; //Wait three minutes before saying
 //TODO: Add a "cooking this" feature to check off which recipes are currently being made. That way switching between recipes will only take those into account. Saying "list recipes" says the names of all recipes being cooked.
 //TODO: Command list help button (and be able to say "help" also)
 //TODO: Should be able to rename timers on the UI
+//TODO: Should be able to scroll through recipe list
+//TODO: Voice list and timer buttons should expand to fit contents (NOT EASY)
 
 //Backend TODO//
 //TODO: Should be able to add together common ingredients across multiple recipes for a "total amount needed request"
-
 
 class Recipe extends Component
 {
@@ -1046,18 +1047,28 @@ class Recipe extends Component
         else if (isNaN(matchIndex)) //Specific section name was referred to in the []
         {
             match = matches.filter(item => item.toLowerCase().startsWith(`{${specificNum}}`)); //specificNum in this case is the name of a section
-            if (match.length > 0)
+            if (match.length === 0) //Section name was non-existent
             {
-                match = match[0];
-                console.log(`Warning! The ingredient "${ingredient}" was not found in any section named "${specificNum}"`);
+                match = ingredient; //Just use the base ingredient name and match nothing
+                console.log(`Warning! The ingredient "${ingredient}" was not found in any section starting with "${specificNum}".`);
             }
-            else //Section name was non-existent
-                match = ingredient; //Just match the first ingredient
+            else
+            {
+                if (match.length > 1)
+                    console.log(`Warning! The ingredient "${ingredient}" was found in multiple sections starting with "${specificNum}".`);
+
+                match = match[0]; //Just match the first section
+            }
+        }
+        else if (matchIndex < 0)
+        {
+            match = ingredient; //Just use the base ingredient name and match nothing
+            console.log(`Warning! The ingredient "${ingredient}" was not found in the ingredients. Make sure any specific number is at least 1.`);
         }
         else if (matchIndex < matches.length)
             match = matches[matchIndex]; //Match the request index in this list
         else
-            match = ingredient; //Just match the first ingredient
+            match = ingredient; //Just use the base ingredient name and match nothing
 
         let section = match.match(SECTION_REGEX);
         if (section)
@@ -1458,6 +1469,7 @@ class Recipe extends Component
             else
             {
                 await this.changeToRecipe(possibleRecipeIds[0]);
+                await this.saveRecipe(); // Updates internal ingredients and instructions arrays
                 this.sayCurrentRecipe();
             }
         }
@@ -1900,6 +1912,8 @@ class Recipe extends Component
         var dropdownTimers = [];
         var numActiveTimers = 0;
         var timerDetails = "";
+        var shortestTimer = null;
+        var shortestTimerDetails = "";
 
         for (let timerName of this.getSortedTimerNameList())
         {
@@ -1910,6 +1924,16 @@ class Recipe extends Component
                 ++numActiveTimers;
 
             timerDetails = `${timerName} - ${timer.hours.toString().padStart(2, "0")}:${timer.minutes.toString().padStart(2, "0")}:${timer.seconds.toString().padStart(2, "0")}`;
+            
+            if (timer.active)
+            {
+                if (shortestTimer == null || this.compareTimers(timerName, shortestTimer.name) < 0)
+                {
+                    shortestTimer = timer;
+                    shortestTimerDetails = timerDetails;
+                }
+            }
+
             dropdownTimers.push(
                 <Dropdown.Item key={timerName}>
                     {timerDetails}
@@ -1935,10 +1959,8 @@ class Recipe extends Component
                 {
                     numActiveTimers === 0 ?
                         "No Active Timers"
-                    : numActiveTimers === 1 ? //Just show the one timer
-                        timerDetails
-                    :
-                        `${numActiveTimers} Active Timer` + (numActiveTimers !== 1 ? "s" : "")
+                    : //Show the timer closest to finishing
+                        shortestTimerDetails
                 }
                 </Dropdown.Toggle>
 
