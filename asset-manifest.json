@@ -1,0 +1,14 @@
+{
+  "files": {
+    "main.css": "./static/css/main.1c7ca5a4.css",
+    "main.js": "./static/js/main.18fecdde.js",
+    "static/media/TimerDone.mp3": "./static/media/TimerDone.c13897f70a508715d48b.mp3",
+    "index.html": "./index.html",
+    "main.1c7ca5a4.css.map": "./static/css/main.1c7ca5a4.css.map",
+    "main.18fecdde.js.map": "./static/js/main.18fecdde.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.1c7ca5a4.css",
+    "static/js/main.18fecdde.js"
+  ]
+}
