@@ -1,7 +1,7 @@
 {
   "name": "recibud",
   "version": "0.1.0",
-  "private": true,
+  "homepage": ".",
   "dependencies": {
     "annyang": "^2.6.1",
     "bootstrap": "^5.3.3",
