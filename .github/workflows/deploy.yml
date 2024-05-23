@@ -2,6 +2,11 @@ name: Deploy React App to gh-pages
 
 on:
   push:
+    paths:
+      - "package.json"
+      - ".github/**"
+      - "public/**"
+      - "src/**"
     branches:
       - master
 
